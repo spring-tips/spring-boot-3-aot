@@ -4,7 +4,6 @@ import org.reflections.Reflections;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
-import org.springframework.aot.hint.annotation.Reflective;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,6 +28,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Controller
 @ImportResource("/context.xml")
@@ -113,7 +113,7 @@ class GooglePlay implements Market {
 
 @Service
 @Qualifier("apple")
-class iTunes implements Market {
+class AppStore implements Market {
 }
 
 class CatFactoryBean implements FactoryBean<Cat> {
@@ -179,9 +179,19 @@ class Dog implements Animal {
     }
 }
 
+class MessageProducer
+        implements Supplier<String> {
+    @Override
+    public String get() {
+        return "Hello, bean ref!";
+    }
+}
+
 class AnnouncingApplicationRunner implements ApplicationRunner {
 
     private final String message;
+
+    private MessageProducer messageProducer;
 
     AnnouncingApplicationRunner(String message) {
         this.message = message;
@@ -193,21 +203,24 @@ class AnnouncingApplicationRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        System.out.println(this.message);
+        if (this.messageProducer != null)
+            System.out.println(this.messageProducer.get());
+        else System.out.println(this.message);
+    }
+
+    public void setMessageProducer(MessageProducer messageProducer) {
+        this.messageProducer = messageProducer;
     }
 }
 
 interface Shape {
 }
 
-//@Reflective
-//@RegisterReflectionForBinding
 class Square implements Shape {
 
     public int getDimension() {
         return 1;
     }
-
 }
 
 class MyRuntimeHintsRegistrar implements RuntimeHintsRegistrar {

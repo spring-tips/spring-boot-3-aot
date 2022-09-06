@@ -4,6 +4,8 @@ import org.reflections.Reflections;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.annotation.Reflective;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -37,6 +39,9 @@ public class DemoApplication {
     @Bean
     ApplicationRunner applicationRunner() {
         return args -> {
+
+
+
             var classNames = "com.example.demo.Dog,com.example.demo.Cat".split(",");
             for (var className : classNames) {
                 var clazz = Class.forName(className);
@@ -44,6 +49,9 @@ public class DemoApplication {
                 var instance = clazz.getDeclaredConstructor().newInstance();
                 method.invoke(instance);
             }
+            var shape = Class.forName(Animal.class.getPackageName() + ".Square") ;
+            var newShape = shape.getDeclaredConstructor().newInstance() ;
+
         };
     }
 }
@@ -53,6 +61,7 @@ interface Animal {
 }
 
 class Cat implements Animal {
+
     @Override
     public void speak() {
         System.out.println("meow!");
@@ -67,12 +76,27 @@ class Dog implements Animal {
     }
 }
 
+@Reflective
+interface Shape {
+}
+@Reflective
+class Circle implements Shape {}
+
+@Reflective
+//@RegisterReflectionForBinding
+class Square implements Shape {
+
+}
+
 class MyRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
 
     private final Reflections reflections = new Reflections(Animal.class.getPackage().getName());
 
     @Override
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+
+
+
         var subs = this.reflections.getSubTypesOf(Animal.class);
         for (var c : subs) {
             hints.reflection().registerType(c, MemberCategory.values());

@@ -4,8 +4,11 @@ import org.reflections.Reflections;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.annotation.Reflective;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
+import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -40,9 +43,7 @@ public class DemoApplication {
 
     @GetMapping("/hello")
     Map<String, String> hello(@RequestParam Optional<String> name) {
-        return name
-                .map(nom -> Map.of("message", "hello, " + nom))
-                .orElse(Map.of("message", "Hello, world!"));
+        return name.map(nom -> Map.of("message", "hello, " + nom)).orElse(Map.of("message", "Hello, world!"));
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -51,20 +52,31 @@ public class DemoApplication {
     }
 
     @Bean
-    ApplicationRunner apple(/*@Qualifier("apple") */@Apple Market market) {
+    ApplicationRunner apple(@Apple Market market) {
         return args -> System.out.println(market.getClass().getName());
     }
 
     @Bean
-    ApplicationRunner android(/*@Qualifier("android")*/@Android Market market) {
+    ApplicationRunner android(@Android Market market) {
         return args -> System.out.println(market.getClass().getName());
+    }
+
+    @Bean
+    ApplicationRunner felixRunner(Cat felix) {
+        return args -> {
+            System.out.println("felix says: ");
+            felix.speak();
+        };
+    }
+
+    @Bean
+    CatFactoryBean felix() {
+        return new CatFactoryBean();
     }
 
     @Bean
     ApplicationRunner applicationRunner() {
         return args -> {
-
-
             var classNames = "com.example.demo.Dog,com.example.demo.Cat".split(",");
             for (var className : classNames) {
                 var clazz = Class.forName(className);
@@ -76,21 +88,8 @@ public class DemoApplication {
             var newShape = shape.getDeclaredConstructor().newInstance();
             var dimension = (Integer) shape.getMethod("getDimension").invoke(newShape);
             System.out.println(dimension);
-
         };
     }
-
-
-  /*  @Bean
-    BeanRegistrationAotProcessor beanRegistrationAotProcessor (){
-        return new BeanRegistrationAotProcessor() {
-            @Override
-            public BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
-
-                return null;
-            }
-        } ;
-    }*/
 }
 
 @Retention(RetentionPolicy.RUNTIME)
@@ -115,6 +114,19 @@ class GooglePlay implements Market {
 @Service
 @Qualifier("apple")
 class iTunes implements Market {
+}
+
+class CatFactoryBean implements FactoryBean<Cat> {
+
+    @Override
+    public Cat getObject() throws Exception {
+        return new Cat();
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        return Cat.class;
+    }
 }
 
 @ResponseBody
@@ -167,10 +179,17 @@ class Dog implements Animal {
     }
 }
 
+@Reflective
+class AnnouncingApplicationRunner implements ApplicationRunner {
+
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        System.out.println("Hello, world!");
+    }
+}
 
 interface Shape {
 }
-
 
 //@Reflective
 //@RegisterReflectionForBinding

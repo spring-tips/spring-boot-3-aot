@@ -179,12 +179,21 @@ class Dog implements Animal {
     }
 }
 
-@Reflective
 class AnnouncingApplicationRunner implements ApplicationRunner {
+
+    private final String message;
+
+    AnnouncingApplicationRunner(String message) {
+        this.message = message;
+    }
+
+    AnnouncingApplicationRunner() {
+        this.message = "Hello, world";
+    }
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        System.out.println("Hello, world!");
+        System.out.println(this.message);
     }
 }
 

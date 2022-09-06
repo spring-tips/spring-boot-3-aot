@@ -5,6 +5,7 @@
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
 
     <bean class="com.example.demo.AnnouncingApplicationRunner">
+<!--        <constructor-arg name="message" type="java.lang.String" value="Hello XML"/>-->
     </bean>
 
 </beans>

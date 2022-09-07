@@ -27,6 +27,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,7 +55,6 @@ import java.util.function.Supplier;
 /**
  * things to try :
  */
-
 @Controller
 @Slf4j
 @ImportResource("/context.xml")
@@ -323,6 +324,22 @@ interface Crm {
 
 	void enroll(String id);
 
+}
+
+@Slf4j
+@EnableConfigurationProperties(FarmProperties.class)
+@Configuration
+class FarmConfiguration {
+
+	@Bean
+	ApplicationListener<ApplicationReadyEvent> farmPropertiesRunner(FarmProperties properties) {
+		return event -> log.info("farm properties name " + properties.name());
+	}
+
+}
+
+@ConfigurationProperties(prefix = "bootiful")
+record FarmProperties(String name) {
 }
 
 @Retention(RetentionPolicy.RUNTIME)

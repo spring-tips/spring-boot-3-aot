@@ -1,21 +1,39 @@
 package com.example.demo;
 
+import lombok.extern.slf4j.Slf4j;
+import org.aopalliance.intercept.MethodInterceptor;
+import org.aopalliance.intercept.MethodInvocation;
 import org.reflections.Reflections;
+import org.springframework.aop.SpringProxy;
+import org.springframework.aop.framework.Advised;
+import org.springframework.aop.framework.ProxyFactoryBean;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.annotation.Reflective;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
+import org.springframework.beans.factory.aot.BeanRegistrationAotContribution;
+import org.springframework.beans.factory.aot.BeanRegistrationAotProcessor;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.RegisteredBean;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ImportResource;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.DecoratingProxy;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Controller;
 import org.springframework.stereotype.Service;
@@ -23,6 +41,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
@@ -30,7 +50,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+/**
+ * things to try :
+ */
+
 @Controller
+@Slf4j
 @ImportResource("/context.xml")
 @ResponseBody
 @SpringBootApplication
@@ -48,23 +73,23 @@ public class DemoApplication {
 
     @EventListener(ApplicationReadyEvent.class)
     public void ready() {
-        System.out.println("application's ready!");
+        log.info("application's ready!");
     }
 
     @Bean
     ApplicationRunner apple(@Apple Market market) {
-        return args -> System.out.println(market.getClass().getName());
+        return args -> log.info(market.getClass().getName());
     }
 
     @Bean
     ApplicationRunner android(@Android Market market) {
-        return args -> System.out.println(market.getClass().getName());
+        return args -> log.info(market.getClass().getName());
     }
 
     @Bean
     ApplicationRunner felixRunner(Cat felix) {
         return args -> {
-            System.out.println("felix says: ");
+            log.info("felix says: ");
             felix.speak();
         };
     }
@@ -87,9 +112,211 @@ public class DemoApplication {
             var shape = Class.forName("com.example.demo.Square");
             var newShape = shape.getDeclaredConstructor().newInstance();
             var dimension = (Integer) shape.getMethod("getDimension").invoke(newShape);
-            System.out.println(dimension);
+            log.info("" + dimension);
         };
     }
+
+
+    @Bean
+    ApplicationRunner crmRunner(Crm crm) {
+        return args -> crm.enroll(UUID.randomUUID().toString());
+    }
+
+    private static class CrmHints implements RuntimeHintsRegistrar {
+
+        @Override
+        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+            hints.proxies().registerJdkProxy(builder -> builder
+                    .proxiedInterfaces(new Class<?>[]{Crm.class, SpringProxy.class, Advised.class, DecoratingProxy.class}));
+        }
+    }
+
+    @Bean
+    @ImportRuntimeHints(CrmHints.class)
+    Crm crm() {
+        var pfb = new ProxyFactoryBean();
+        pfb.setTargetClass(Crm.class);
+        pfb.addAdvice(new MethodInterceptor() {
+            @Nullable
+            @Override
+            public Object invoke(@Nonnull MethodInvocation invocation) throws Throwable {
+                if (invocation.getMethod().getName().equals("enroll"))
+                    log.info("enrolling " + invocation.getArguments()[0]);
+                return null;
+            }
+        });
+        return (Crm) pfb.getObject();
+    }
+
+    @Bean
+    CarFactoryBean carFactoryBean() {
+        return new CarFactoryBean();
+    }
+
+    @Bean
+    ApplicationRunner carRunner(Car car) {
+        return args -> log.info("got a car " + car.getClass().getName());
+    }
+
+    @Bean
+    MyBeanFactoryInitializationAotProcessor myBeanFactoryInitializationAotProcessor() {
+        return new MyBeanFactoryInitializationAotProcessor();
+    }
+}
+
+
+@Slf4j
+@Configuration
+class ReverserConfiguration {
+
+    @Bean
+    ApplicationListener<ApplicationReadyEvent> reverserReady(Reverser reverser) {
+        return event -> {
+            var reversed = reverser.reverse("hello");
+            log.info("reversed: " + reversed);
+        };
+    }
+
+    @Bean
+    Reverser reverser() {
+        return new DefaultReverser();
+    }
+
+    @Bean
+    MethodLoggingBeanPostProcessor methodLoggingBeanPostProcessor() {
+        return new MethodLoggingBeanPostProcessor();
+    }
+
+    @Bean
+    MethodLoggingBeanRegistrationAotProcessor methodLoggingBeanRegistrationAotProcessor() {
+        return new MethodLoggingBeanRegistrationAotProcessor();
+    }
+}
+
+
+interface Reverser {
+
+    String reverse(String name);
+}
+
+@Reflective
+class DefaultReverser implements Reverser {
+
+    @Override
+    public String reverse(String name) {
+        return new StringBuilder(name).reverse().toString();
+    }
+}
+
+@Slf4j
+class MethodLoggingBeanRegistrationAotProcessor implements BeanRegistrationAotProcessor {
+
+    @Override
+    public BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
+        log.info("processAheadOfTime for " + registeredBean.getBeanClass(). getName());
+
+        return (generationContext, beanRegistrationCode) -> {
+            generationContext.getRuntimeHints().proxies().registerJdkProxy(
+                    com.example.demo.Reverser.class,
+                    org.springframework.aop.SpringProxy.class,
+                    org.springframework.aop.framework.Advised.class,
+                    org.springframework.core.DecoratingProxy.class);
+        };
+    }
+}
+
+@Slf4j
+class MethodLoggingBeanPostProcessor implements BeanPostProcessor {
+
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+
+        log.info("found: " + beanName + " with class " + bean.getClass().getName());
+
+        if (bean instanceof Reverser reverser) {
+            log.info("found an instance of Reverser " + reverser);
+            var result = MethodLoggingBeanBuilder.build(reverser);
+            for (var o : result.getClass().getInterfaces())
+                log.info("IF:" + o.getName());
+            log.info("returning proxied instance of " + Reverser.class.getName());
+            return result;
+        }
+        return bean;
+    }
+
+}
+
+@Slf4j
+class MethodLoggingBeanBuilder {
+
+    static <T> T build(T t) {
+        var pfb = new ProxyFactoryBean();
+        pfb.setTarget(t);
+        for (var i : t.getClass().getInterfaces())
+            pfb.addInterface(i);
+        pfb.addAdvice(new MethodInterceptor() {
+            @Nullable
+            @Override
+            public Object invoke(@Nonnull MethodInvocation invocation) throws Throwable {
+                var methodName = invocation.getMethod().getName();
+                log.info("beginning [" + methodName + "]");
+                var result = invocation.proceed();
+                log.info("finishing [" + methodName + "]");
+                return result;
+            }
+        });
+
+        var object = (T) pfb.getObject();
+        for (var i : object.getClass().getInterfaces())
+            log.info(i.getName());
+        return object;
+    }
+}
+
+
+@Slf4j
+class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
+
+    @Override
+    public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory beanFactory) {
+
+        var beanDefinitionNames = beanFactory.getBeanDefinitionNames();
+        for (var beanDefinitionName : beanDefinitionNames) {
+            log.info("going to process the bean definition called " + beanDefinitionName);
+            var bd = beanFactory.getBeanDefinition(beanDefinitionName);
+            var clzz = bd.getBeanClassName();
+            log.info("class is " + clzz);
+        }
+        return null;
+    }
+}
+
+
+class Car {
+}
+
+class Sedan extends Car {
+}
+
+class Truck extends Car {
+}
+
+class CarFactoryBean implements FactoryBean<Object> {
+
+    @Override
+    public Object getObject() throws Exception {
+        return Math.random() > 0.5 ? new Truck() : new Sedan();
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        return Car.class;
+    }
+}
+
+interface Crm {
+
+    void enroll(String id);
 }
 
 @Retention(RetentionPolicy.RUNTIME)
@@ -101,7 +328,6 @@ public class DemoApplication {
 @Qualifier("apple")
 @interface Apple {
 }
-
 
 interface Market {
 }
@@ -163,19 +389,28 @@ interface Animal {
     void speak();
 }
 
+@Slf4j
 class Cat implements Animal {
+
+    Cat(String name) {
+        log.info("the name is " + name);
+    }
+
+    Cat() {
+    }
 
     @Override
     public void speak() {
-        System.out.println("meow!");
+        log.info("meow!");
     }
 }
 
+@Slf4j
 class Dog implements Animal {
 
     @Override
     public void speak() {
-        System.out.println("woof!");
+        log.info("woof!");
     }
 }
 
@@ -187,6 +422,7 @@ class MessageProducer
     }
 }
 
+@Slf4j
 class AnnouncingApplicationRunner implements ApplicationRunner {
 
     private final String message;
@@ -203,9 +439,9 @@ class AnnouncingApplicationRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        if (this.messageProducer != null)
-            System.out.println(this.messageProducer.get());
-        else System.out.println(this.message);
+        if (this.messageProducer != null) {
+            log.info(this.messageProducer.get());
+        } else log.info(this.message);
     }
 
     public void setMessageProducer(MessageProducer messageProducer) {
@@ -223,6 +459,7 @@ class Square implements Shape {
     }
 }
 
+@Slf4j
 class MyRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
 
     private final Reflections reflections = new Reflections(Animal.class.getPackage().getName());
@@ -232,7 +469,7 @@ class MyRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
         var subs = this.reflections.getSubTypesOf(Animal.class);
         for (var c : subs) {
             hints.reflection().registerType(c, MemberCategory.values());
-            System.out.println("registering " + c.getName());
+            log.info("registering " + c.getName());
         }
     }
 }

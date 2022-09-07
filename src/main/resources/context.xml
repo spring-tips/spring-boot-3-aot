@@ -5,9 +5,9 @@
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
 
 
-    <bean class="com.example.demo.MessageProducer" name="messageProducer" />
+    <bean class="com.example.demo.xml.MessageProducer" name="messageProducer" />
 
-    <bean class="com.example.demo.AnnouncingApplicationRunner">
+    <bean class="com.example.demo.xml.AnnouncingApplicationRunner">
         <property name="messageProducer" ref="messageProducer" />
         <!--        <constructor-arg name="message" type="java.lang.String" value="Hello XML"/>-->
     </bean>

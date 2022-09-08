@@ -1,8 +1,10 @@
 package com.example.demo.bfiap;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.aot.generate.GenerationContext;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationCode;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 
 @Slf4j
@@ -10,7 +12,6 @@ class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializati
 
 	@Override
 	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory beanFactory) {
-
 		var beanDefinitionNames = beanFactory.getBeanDefinitionNames();
 		for (var beanDefinitionName : beanDefinitionNames) {
 			log.info("going to process the bean definition called " + beanDefinitionName);
@@ -18,7 +19,13 @@ class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializati
 			var clzz = bd.getBeanClassName();
 			log.info("class is " + clzz);
 		}
-		return null;
+		return new BeanFactoryInitializationAotContribution() {
+			@Override
+			public void applyTo(GenerationContext ctx, BeanFactoryInitializationCode code) {
+				var reflectionHints = ctx.getRuntimeHints().reflection();
+
+			}
+		};
 	}
 
 }

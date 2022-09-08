@@ -24,13 +24,8 @@ class ProxyConfiguration {
 	}
 
 	@Bean
-	MethodLoggingBeanPostProcessor methodLoggingBeanPostProcessor() {
-		return new MethodLoggingBeanPostProcessor();
-	}
-
-	@Bean
-	MethodLoggingBeanRegistrationAotProcessor methodLoggingBeanRegistrationAotProcessor() {
-		return new MethodLoggingBeanRegistrationAotProcessor();
+	MethodLoggingProcessor methodLoggingBeanRegistrationAotProcessor() {
+		return new MethodLoggingProcessor();
 	}
 
 }

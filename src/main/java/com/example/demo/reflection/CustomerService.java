@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
@@ -33,10 +34,10 @@ class CustomerService {
 
 @Slf4j
 @Configuration
+@RegisterReflectionForBinding(Customer.class)
 class ReflectionConfiguration {
 
 	@Bean
-	@ImportRuntimeHints(ReflectionRuntimeHints.class)
 	CustomerService customerService() {
 		return new CustomerService();
 	}
@@ -49,16 +50,6 @@ class ReflectionConfiguration {
 			var json = json(objectMapper, customer);
 			log.info(json);
 		};
-	}
-
-	static class ReflectionRuntimeHints implements RuntimeHintsRegistrar {
-
-		@Override
-		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-			hints.reflection().registerType(Customer.class, MemberCategory.values());
-			hints.reflection().registerType(Order.class, MemberCategory.values());
-		}
-
 	}
 
 	@SneakyThrows

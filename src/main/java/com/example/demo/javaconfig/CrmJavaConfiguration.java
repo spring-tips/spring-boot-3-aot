@@ -18,8 +18,8 @@ class CrmJavaConfiguration {
 	}
 
 	@Bean
-	B b(A a) {
-		return new B(a);
+	B b() {
+		return new B(this.a());
 	}
 
 }

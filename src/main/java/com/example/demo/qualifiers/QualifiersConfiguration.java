@@ -11,12 +11,16 @@ class QualifiersConfiguration {
 
 	@Bean
 	ApplicationRunner apple(@Apple Market market) {
-		return args -> log.info(market.getClass().getName());
+		return args -> debug(market);
 	}
 
 	@Bean
 	ApplicationRunner android(@Android Market market) {
-		return args -> log.info(market.getClass().getName());
+		return args -> debug(market);
+	}
+
+	private static void debug(Market market) {
+		log.info(market.getClass().getName());
 	}
 
 }

@@ -1,4 +1,4 @@
-package com.example.demo.hints;
+package com.example.demo.proxies;
 
 interface Crm {
 

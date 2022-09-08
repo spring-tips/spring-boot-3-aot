@@ -1,4 +1,4 @@
-package com.example.demo.hints;
+package com.example.demo.proxies;
 
 import lombok.extern.slf4j.Slf4j;
 import org.aopalliance.intercept.MethodInterceptor;

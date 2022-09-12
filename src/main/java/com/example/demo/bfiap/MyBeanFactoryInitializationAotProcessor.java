@@ -16,8 +16,7 @@ class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializati
 	@Override
 	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory beanFactory) {
 		return (ctx, code) -> {
-
-			GeneratedMethod generatedMethod = code.getMethods().add("registerStuff", (method) -> {
+			var generatedMethod = code.getMethods().add("registerStuff", (method) -> {
 				method.addJavadoc("Add ImportAwareBeanPostProcessor to support ImportAware beans");
 				method.addModifiers(Modifier.STATIC, Modifier.PUBLIC);
 				method.addParameter(DefaultListableBeanFactory.class, "beanFactory");

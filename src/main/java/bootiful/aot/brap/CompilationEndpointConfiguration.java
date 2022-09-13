@@ -9,7 +9,6 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.SpringProxy;
 import org.springframework.aop.framework.Advised;
 import org.springframework.aop.framework.ProxyFactoryBean;
-import org.springframework.aot.hint.MemberCategory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.aot.BeanRegistrationAotContribution;
 import org.springframework.beans.factory.aot.BeanRegistrationAotProcessor;

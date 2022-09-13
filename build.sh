@@ -1,3 +1,2 @@
 #!/usr/bin/env bash
-
-./mvnw -U -DskipTests -Pnative spring-javaformat:apply clean package && ./target/demo
+rm -rf target && ./mvnw spring-javaformat:apply  -DskipTests -Pnative spring-javaformat:apply clean package && ./target/demo

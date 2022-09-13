@@ -9,10 +9,15 @@ import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import javax.lang.model.element.Modifier;
+
+import static org.springframework.javapoet.CodeBlock.builder;
 
 @Configuration
 class MyBeanFactoryPostProcessorConfiguration {
@@ -59,8 +64,25 @@ class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializati
 
 	@Override
 	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory bf) {
-		return (context, bic) -> context.getRuntimeHints().reflection().registerType(MessageApplicationListener.class,
-				MemberCategory.values());
+		return (context, code) -> {
+			// hints
+			context.getRuntimeHints().reflection().registerType(MessageApplicationListener.class,
+					MemberCategory.values());
+
+			// code generation
+			var className = MyBeanFactoryInitializationAotProcessor.class.getName();
+			var codeBlock = builder().addStatement("System.out.println(\"Hello, world from $L!\")  ", className)
+					.build();
+			var generatedMethod = code//
+					.getMethods() //
+					.add("registerPrintln", (method) -> {
+						method.addJavadoc("Register a println()");
+						method.addModifiers(Modifier.STATIC, Modifier.PUBLIC);
+						method.addParameter(DefaultListableBeanFactory.class, "beanFactory");
+						method.addCode(codeBlock);
+					});
+			code.addInitializer(generatedMethod.toMethodReference());
+		};
 	}
 
 }

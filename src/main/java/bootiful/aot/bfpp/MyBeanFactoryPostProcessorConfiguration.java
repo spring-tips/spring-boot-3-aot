@@ -2,6 +2,7 @@ package bootiful.aot.bfpp;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aot.generate.GenerationContext;
+import org.springframework.aot.hint.MemberCategory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
@@ -61,7 +62,8 @@ class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializati
 
 	@Override
 	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory bf) {
-		return (context, bic) -> context.getRuntimeHints().reflection().registerType(MessageApplicationListener.class);
+		return (context, bic) -> context.getRuntimeHints().reflection().registerType(MessageApplicationListener.class,
+				MemberCategory.values());
 	}
 
 }

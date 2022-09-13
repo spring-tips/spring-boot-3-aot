@@ -4,11 +4,9 @@
        xsi:schemaLocation="
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
 
+    <bean class="bootiful.aot.xml.MessageProducer" name="messageProducer"/>
 
-    <bean class="com.example.xml.bootiful.aot.MessageProducer" name="messageProducer" />
-
-    <bean class="com.example.xml.bootiful.aot.AnnouncingApplicationRunner">
-        <property name="messageProducer" ref="messageProducer" />
-        <!--        <constructor-arg name="message" type="java.lang.String" value="Hello XML"/>-->
+    <bean class="bootiful.aot.xml.AnnouncingApplicationRunner">
+        <property name="messageProducer" ref="messageProducer"/>
     </bean>
 </beans>

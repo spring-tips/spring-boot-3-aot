@@ -1,5 +1,6 @@
 package bootiful.aot.detection;
 
+import bootiful.aot.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aot.AotDetector;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -14,7 +15,7 @@ import java.util.Map;
 
 @Slf4j
 @Configuration
-class AotConditionConfiguration {
+class AotDetectionConfiguration {
 
 	@Bean
 	ApplicationListener<ApplicationReadyEvent> isNativeApplicationListener(Environment env) {
@@ -28,8 +29,7 @@ class AotConditionConfiguration {
 					"org.graalvm.nativeimage.imagecode (Environment)",
 					"" + env.getProperty("org.graalvm.nativeimage.imagecode") //
 			);
-			map.forEach((k, v) -> log.info(k + '=' + v));
-
+			log.info(Utils.toString(map));
 		};
 	}
 

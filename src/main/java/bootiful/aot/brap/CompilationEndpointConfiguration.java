@@ -1,5 +1,6 @@
 package bootiful.aot.brap;
 
+import bootiful.aot.Utils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.aot.BeanRegistrationAotContribution;
@@ -25,7 +26,7 @@ class CompilationEndpointConfiguration {
 
 	@Bean
 	ApplicationListener<ApplicationReadyEvent> readyEventApplicationListener(CompilationEndpoint endpoint) {
-		return event -> log.info(endpoint.compilation().toString());
+		return event -> log.info(Utils.toString(endpoint.compilation()));
 	}
 
 	@Bean

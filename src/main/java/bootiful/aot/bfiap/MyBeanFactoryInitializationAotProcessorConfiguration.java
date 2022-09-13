@@ -9,23 +9,25 @@ import org.springframework.javapoet.CodeBlock;
 
 import javax.lang.model.element.Modifier;
 
+import static org.springframework.javapoet.CodeBlock.builder;
+
 @Slf4j
 @Configuration
 class MyBeanFactoryInitializationAotProcessorConfiguration {
 
 	@Bean
 	BeanFactoryInitializationAotProcessor aotProcessor() {
+		var className = MyBeanFactoryInitializationAotProcessorConfiguration.class.getName();
 		return beanFactory -> (ctx, code) -> {
-			var generatedMethod = code.getMethods() //
-					.add("registerMyPrintln", (method) -> {
+			var codeBlock = builder().addStatement("System.out.println(\"Hello, world from $L!\")  ", className)
+					.build();
+			var generatedMethod = code//
+					.getMethods() //
+					.add("registerPrintln", (method) -> {
 						method.addJavadoc("Register a println()");
 						method.addModifiers(Modifier.STATIC, Modifier.PUBLIC);
 						method.addParameter(DefaultListableBeanFactory.class, "beanFactory");
-						method.addCode(CodeBlock.builder()
-								.addStatement(("  System.out.println(\"Hello, world from "
-										+ MyBeanFactoryInitializationAotProcessorConfiguration.class.getName()
-										+ "!\")  ").trim())
-								.build());
+						method.addCode(codeBlock);
 					});
 			code.addInitializer(generatedMethod.toMethodReference());
 		};

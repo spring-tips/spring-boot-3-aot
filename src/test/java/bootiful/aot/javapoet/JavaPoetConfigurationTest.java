@@ -1,10 +1,7 @@
 package bootiful.aot.javapoet;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationListener;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.junit.jupiter.api.Test;
 import org.springframework.javapoet.JavaFile;
 import org.springframework.javapoet.MethodSpec;
 import org.springframework.javapoet.TypeSpec;
@@ -14,35 +11,37 @@ import org.springframework.util.StringUtils;
 
 import javax.lang.model.element.Modifier;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.stream.Stream;
 
 @Slf4j
-@Configuration
-class JavaPoetConfiguration {
+class JavaPoetConfigurationTest {
 
 	record Customer(Integer id, String name) {
 	}
 
-	class CustomerService {
+	static class CustomerService {
 
-		private final Map<Integer, Customer> customerMap = Map.of(1, new Customer(1, "Jürgen"));
+		private final Map<Integer, Customer> db = Map.of(1, new Customer(1, "Jürgen"));
+
+		Customer save(Integer id, String name) {
+			return this.db.put(id, new Customer(id, name));
+		}
 
 		Customer byId(Integer id) {
-			return this.customerMap.get(id);
+			return this.db.get(id);
 		}
 
 	}
 
-	@Bean
-	ApplicationListener<ApplicationReadyEvent> javaPoetListener() {
-		return event -> {
-			var clazzToSubclass = CustomerService.class;
-			var typeSpec = subclassFor(clazzToSubclass);
-			var javaFile = JavaFile.builder(clazzToSubclass.getPackageName(), typeSpec).build();
-			log.info(javaFile.toString());
-		};
+	@Test
+	void test() {
+		var typeSpec = subclassFor(CustomerService.class);
+		var javaFile = JavaFile//
+				.builder(CustomerService.class.getPackageName(), typeSpec)//
+				.build();
+		var javaCode = javaFile.toString();
+		log.info("java: " + javaCode);
 	}
 
 	private MethodSpec buildSubclassMethodFor(Method method) {
@@ -50,14 +49,17 @@ class JavaPoetConfiguration {
 				.addModifiers(Modifier.PUBLIC)//
 				.returns(method.getReturnType())//
 				.addAnnotation(Override.class);
-		var paramNames = new ArrayList<String>();
-		Stream.of(method.getParameters()).forEach(parameter -> {
-			paramNames.add(parameter.getName());
-			newMethodDefinition.addParameter(parameter.getType(), parameter.getName());
-		});
-		var javaMethodBodyCode = String.format("   %s super.$L($L) ".trim(),
+
+		var paramNames = Stream //
+				.of(method.getParameters())//
+				.map(parameter -> {//
+					var parameterName = parameter.getName();//
+					newMethodDefinition.addParameter(parameter.getType(), parameterName);
+					return parameterName;
+				}).toList();
+		var returnStatement = String.format("%s super.$L($L)".trim(),
 				method.getReturnType().equals(Void.class) ? "" : " return");
-		newMethodDefinition.addStatement(javaMethodBodyCode, method.getName(),
+		newMethodDefinition.addStatement(returnStatement, method.getName(),
 				StringUtils.collectionToDelimitedString(paramNames, ","));
 		return newMethodDefinition.build();
 	}

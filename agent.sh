@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 
 rm -rf target
-./mvnw -Dagent=true -DskipTests  spring-javaformat:apply clean package spring-boot:run
+./mvnw -DskipTests  spring-javaformat:apply clean package
+./mvnw -DagentJvmArguments="-agentlib:native-image-agent=config-output-dir=target/native-image" spring-boot:run

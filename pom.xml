@@ -14,6 +14,7 @@
     <name>demo</name>
     <description>Demo project for Spring Boot</description>
     <properties>
+        <agentJvmArguments></agentJvmArguments>
         <java.version>17</java.version>
     </properties>
     <dependencies>
@@ -69,6 +70,9 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+          <configuration>
+                    <jvmArguments>${agentJvmArguments}</jvmArguments>
+                </configuration>
             </plugin>
         </plugins>
     </build>

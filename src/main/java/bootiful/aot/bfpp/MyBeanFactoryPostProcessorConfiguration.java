@@ -51,9 +51,9 @@ class MyBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
 
 		for (var beanName : beanFactory.getBeanDefinitionNames()) {
 			var beanDefinition = beanFactory.getBeanDefinition(beanName);
-			log.info("=====================");
-			log.info("beanClassName: " + beanDefinition.getBeanClassName());
-			log.info("rawClassName: " + beanDefinition.getResolvableType());
+			log.debug("=====================");
+			log.debug("beanClassName: " + beanDefinition.getBeanClassName());
+			log.debug("rawClassName: " + beanDefinition.getResolvableType());
 		}
 
 	}

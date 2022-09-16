@@ -73,15 +73,15 @@ class LoggedBeanPostProcessor implements SmartInstantiationAwareBeanPostProcesso
 
 	@SneakyThrows
 	private ProxyFactory createProxy(Object o, Class<?> targetClass) {
-		var pfb = new ProxyFactory();
-		pfb.setProxyTargetClass(true);
-		pfb.setTargetClass(targetClass);
-		pfb.setInterfaces(targetClass.getInterfaces());
-		pfb.addAdvice((MethodInterceptor) invocation -> intercept(o, invocation));
+		var proxyFactory = new ProxyFactory();
+		proxyFactory.setProxyTargetClass(true);
+		proxyFactory.setTargetClass(targetClass);
+		proxyFactory.setInterfaces(targetClass.getInterfaces());
+		proxyFactory.addAdvice((MethodInterceptor) invocation -> intercept(o, invocation));
 		if (null != o) {
-			pfb.setTarget(o);
+			proxyFactory.setTarget(o);
 		}
-		return pfb;
+		return proxyFactory;
 	}
 
 	private boolean beanClassMatches(Class<?> beanClazz) {

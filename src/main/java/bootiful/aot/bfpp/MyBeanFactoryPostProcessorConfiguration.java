@@ -39,23 +39,14 @@ class MyBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
 
 	@Override
 	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-
 		if (beanFactory instanceof BeanDefinitionRegistry bdr) {
 			var beanName = "bdr";
 			if (bdr.containsBeanDefinition(beanName)) {
 				bdr.removeBeanDefinition(beanName);
 			} //
-			bdr.registerBeanDefinition("bdr",
+			bdr.registerBeanDefinition(beanName,
 					BeanDefinitionBuilder.rootBeanDefinition(MessageApplicationListener.class).getBeanDefinition());
 		} //
-
-		for (var beanName : beanFactory.getBeanDefinitionNames()) {
-			var beanDefinition = beanFactory.getBeanDefinition(beanName);
-			log.debug("=====================");
-			log.debug("beanClassName: " + beanDefinition.getBeanClassName());
-			log.debug("rawClassName: " + beanDefinition.getResolvableType());
-		}
-
 	}
 
 }
@@ -63,26 +54,9 @@ class MyBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
 class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
 
 	@Override
-	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory bf) {
-		return (context, code) -> {
-			// hints
-			context.getRuntimeHints().reflection().registerType(MessageApplicationListener.class,
-					MemberCategory.values());
-
-			// code generation
-			var className = MyBeanFactoryInitializationAotProcessor.class.getName();
-			var codeBlock = builder().addStatement("System.out.println(\"Hello, world from $L!\")  ", className)
-					.build();
-			var generatedMethod = code//
-					.getMethods() //
-					.add("registerPrintln", (method) -> {
-						method.addJavadoc("Register a println()");
-						method.addModifiers(Modifier.STATIC, Modifier.PUBLIC);
-						method.addParameter(DefaultListableBeanFactory.class, "beanFactory");
-						method.addCode(codeBlock);
-					});
-			code.addInitializer(generatedMethod.toMethodReference());
-		};
+	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory beanFactory) {
+		return (context, code) -> context.getRuntimeHints().reflection().registerType(MessageApplicationListener.class,
+				MemberCategory.values());
 	}
 
 }

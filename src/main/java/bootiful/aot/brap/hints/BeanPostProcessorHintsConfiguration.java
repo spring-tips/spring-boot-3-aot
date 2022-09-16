@@ -15,7 +15,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.lang.annotation.*;
-import java.lang.reflect.Method;
 
 @Slf4j
 @Configuration
@@ -54,8 +53,16 @@ class LoggedBeanPostProcessor implements SmartInstantiationAwareBeanPostProcesso
 		return beanClass;
 	}
 
+	@Override
+	public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+		if (!beanClassMatches(bean.getClass())) {
+			return SmartInstantiationAwareBeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
+		}
+		return createProxy(bean, bean.getClass()).getProxy(bean.getClass().getClassLoader());
+	}
+
 	@SneakyThrows
-	private static Object intercept(Object object, MethodInvocation invocation) {
+	private Object intercept(Object object, MethodInvocation invocation) {
 		var method = invocation.getMethod();
 		var methodName = method.getName();
 		log.info("before [{}}]", methodName);
@@ -65,7 +72,7 @@ class LoggedBeanPostProcessor implements SmartInstantiationAwareBeanPostProcesso
 	}
 
 	@SneakyThrows
-	private static ProxyFactory createProxy(Object o, Class<?> targetClass) {
+	private ProxyFactory createProxy(Object o, Class<?> targetClass) {
 		var pfb = new ProxyFactory();
 		pfb.setProxyTargetClass(true);
 		pfb.setTargetClass(targetClass);
@@ -75,14 +82,6 @@ class LoggedBeanPostProcessor implements SmartInstantiationAwareBeanPostProcesso
 			pfb.setTarget(o);
 		}
 		return pfb;
-	}
-
-	@Override
-	public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-		if (!beanClassMatches(bean.getClass())) {
-			return SmartInstantiationAwareBeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
-		}
-		return createProxy(bean, bean.getClass()).getProxy(bean.getClass().getClassLoader());
 	}
 
 	private boolean beanClassMatches(Class<?> beanClazz) {

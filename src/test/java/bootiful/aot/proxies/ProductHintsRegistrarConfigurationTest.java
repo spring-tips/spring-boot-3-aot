@@ -1,4 +1,4 @@
-package bootiful.aot.hints;
+package bootiful.aot.proxies;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.aot.hint.MemberCategory;

@@ -1,31 +1,21 @@
-package bootiful.aot.bfpp;
+package bootiful.aot.beanfactoryprocessors;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
-import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import javax.lang.model.element.Modifier;
-
-import static org.springframework.javapoet.CodeBlock.builder;
-
 @Configuration
 class MyBeanFactoryPostProcessorConfiguration {
-
-	@Bean
-	MyBeanFactoryInitializationAotProcessor myBeanFactoryInitializationAotProcessor() {
-		return new MyBeanFactoryInitializationAotProcessor();
-	}
 
 	@Bean
 	static MyBeanFactoryPostProcessor myBeanFactoryPostProcessor() {
@@ -35,23 +25,20 @@ class MyBeanFactoryPostProcessorConfiguration {
 }
 
 @Slf4j
-class MyBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
+class MyBeanFactoryPostProcessor implements BeanFactoryInitializationAotProcessor, BeanDefinitionRegistryPostProcessor {
+
+	@Override
+	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+		var beanName = "mal";
+		if (!registry.containsBeanDefinition(beanName)) {
+			registry.registerBeanDefinition(beanName,
+					BeanDefinitionBuilder.rootBeanDefinition(MessageApplicationListener.class).getBeanDefinition());
+		}
+	}
 
 	@Override
 	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-		if (beanFactory instanceof BeanDefinitionRegistry bdr) {
-			var beanName = "bdr";
-			if (bdr.containsBeanDefinition(beanName)) {
-				bdr.removeBeanDefinition(beanName);
-			} //
-			bdr.registerBeanDefinition(beanName,
-					BeanDefinitionBuilder.rootBeanDefinition(MessageApplicationListener.class).getBeanDefinition());
-		} //
 	}
-
-}
-
-class MyBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
 
 	@Override
 	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory beanFactory) {

@@ -24,7 +24,6 @@ import java.util.stream.Stream;
 
 @Slf4j
 @Configuration
-@RegisterReflectionForBinding(Customer.class)
 class ReflectionConfiguration {
 
 	@SneakyThrows
@@ -33,6 +32,7 @@ class ReflectionConfiguration {
 	}
 
 	@Bean
+	@RegisterReflectionForBinding(Customer.class)
 	@ImportRuntimeHints(CustomerServiceRuntimeHints.class)
 	ApplicationListener<ApplicationReadyEvent> reflectionListener(CustomerService customerService,
 			ObjectMapper objectMapper) {

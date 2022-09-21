@@ -68,6 +68,17 @@
                 </executions>
             </plugin>
             <plugin>
+                <groupId>org.graalvm.buildtools</groupId>
+                <artifactId>native-maven-plugin</artifactId>
+                <version>0.9.13</version>
+                <configuration>
+                    <metadataRepository>
+                        <enabled>true</enabled>
+                        <version>0.2.0</version>
+                    </metadataRepository>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>

@@ -11,15 +11,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ProductHintsRegistrarConfigurationTest {
 
-	@Test
-	void shouldRegisterHints() {
-		RuntimeHints runtimeHints = new RuntimeHints();
-		new CustomerRuntimeHintsRegistrar().registerHints(runtimeHints, getClass().getClassLoader());
-		Set<Class<?>> bindingTypes = Set.of(Customer.class);
-		for (Class<?> bindingType : bindingTypes) {
-			assertThat(RuntimeHintsPredicates.reflection().onType(bindingType)
-					.withMemberCategories(MemberCategory.values())).accepts(runtimeHints);
-		}
-	}
+	/*
+	 *
+	 * @Test void shouldRegisterHints() { RuntimeHints runtimeHints = new RuntimeHints();
+	 * new CustomerRuntimeHintsRegistrar().registerHints(runtimeHints,
+	 * getClass().getClassLoader()); Set<Class<?>> bindingTypes = Set.of(Customer.class);
+	 * for (Class<?> bindingType : bindingTypes) {
+	 * assertThat(RuntimeHintsPredicates.reflection().onType(bindingType)
+	 * .withMemberCategories(MemberCategory.values())).accepts(runtimeHints); } }
+	 */
 
 }

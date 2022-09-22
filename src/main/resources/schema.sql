@@ -1,0 +1,1 @@
+create table ORDER_ITEM (id serial primary  key , sku varchar(255) not null ) ;

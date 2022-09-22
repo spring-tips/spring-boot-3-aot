@@ -19,6 +19,16 @@
     </properties>
     <dependencies>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
             <groupId>org.reflections</groupId>
             <artifactId>reflections</artifactId>
             <version>0.10.2</version>
@@ -70,13 +80,15 @@
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
                 <artifactId>native-maven-plugin</artifactId>
-                <version>0.9.13</version>
+                <version>0.9.14</version>
+                <!--
                 <configuration>
                     <metadataRepository>
                         <enabled>true</enabled>
                         <version>0.2.0</version>
                     </metadataRepository>
                 </configuration>
+                -->
             </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

@@ -1,1 +1,5 @@
-create table ORDER_ITEM (id serial primary  key , sku varchar(255) not null ) ;
+create table customer
+(
+    id   serial primary key,
+    name varchar(255) not null
+);

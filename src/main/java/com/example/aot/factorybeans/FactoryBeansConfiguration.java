@@ -53,7 +53,6 @@ class Dog implements Animal {
 }
 
 class Cat implements Animal {
-
     @Override
     public void speak() {
         System.out.println("meow");

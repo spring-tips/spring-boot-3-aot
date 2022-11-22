@@ -13,18 +13,18 @@ import java.util.stream.Stream;
 class BasicsConfiguration {
 
     @Bean
-    ApplicationListener<ApplicationReadyEvent> basicsApplicationListener(CustomerRepository repository) {
-        return event -> repository.saveAll(
-                        Stream.of("A", "B", "C")
-                                .map(name -> new Customer(null, name))
-                                .toList()
-                )
+    ApplicationListener<ApplicationReadyEvent> basicsApplicationListener(
+            CustomerRepository repository) {
+        return event -> repository //
+                .saveAll(Stream.of("A", "B", "C").map(name -> new Customer(null, name)).toList()) //
                 .forEach(System.out::println);
     }
 }
 
+// <1>
 record Customer(@Id Integer id, String name) {
 }
 
+// <2>
 interface CustomerRepository extends CrudRepository<Customer, Integer> {
 }

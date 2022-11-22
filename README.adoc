@@ -1,0 +1,70 @@
+:root: .
+:source: ./src/main/java
+
+= Everything You Never Wanted to Know About Spring Boot 3 AOT
+
+Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know the broads strokes of what's included, check https://www.youtube.com/watch?v=aUm5WZjh8RA[out this Spring Tips video] for a quick rundown. In this installment, however, I want to look at the details of the brand new ahead-of-time (AOT) compilation engine in Spring Boot 3.
+
+== Introduction
+
+To really appreciate the magic of what's being introduced in Spring Boot 3, I find it's useful to understand where we were to appreciate where we are now. Traditional Spring applications have _phases_ that they go through when they're run. This isn't exactly what's happening, but here's a simplification of what's happening:
+
+
+* `ingest` - the Spring application starts up and reads in all the sources of configuration. Remember: Spring Framework is a dependency management framework. It needs to know how your various objects are constructed, their lifecycles (constructors, `InitializingBean#afterPropertiesSet`,`@PostConstruct`, `DisposableBean#destroy`, @PreDestroy), etc. It reads the various configuration files from all the `@Configuration`-annotated classes in your application, through component scanning where Spring discovers classes annotated   with `@Component`. This component scanning also discovers classes annotated with annotations that themselves are annotated with `@Component`, like `@Service`, `@Repository`, @Controller`, and `@RestController`. It also reads in configuration from Spring's classic XML configuration format. (I don't use it, and haven't seen it in the wild in more than half a decade, but still...).
+*  `BeanFactory` creation with `BeanDefinition`  instances  - at this point, Spring turns all the various inputs into a metamodel, full of `BeanDefinition` instances. These `BeanDefinition` instances describe the objects that will be wired together. They describe the constructors. The properties to be injected. The setters. The annotations. Everything that will be required to describe this object and get it to a valid state so that it may be given to other objects and just generally start doing work. Importantly, at this phase there are no live-fire beans. Nothing opening ports and sockets. Nothing doing disk IO. None of your business logic will be involved at this point.
+* `bean` creation - at this point, Spring will take all the `BeanDefinition`  objects and create from them actual, live-fire beans. Constructors will be called. Lifecycle methods invoked. Dependencies satisfied. At the conclusion of this phase, you'll have an application that's ready to serve production traffic. Which is a nice place to be.
+
+
+== Enter GraalVm
+
+GraalVM is a dropin replacement for OpenJDK. It _is_ OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra mechanisms, but let's focus on the `native-image` compiler. Henceforth, when I say GraalVM, I'll be referring to the `native-image` compiler.
+
+== Getting Started
+
+To start, as always, we'll go to the https://start.spring.io[Spring Initialzr]. As of 24 November 2022, you'll be able to choose the final Spring Boot 3 general release. But as I write this, I need to use Spring Boot 3 SNAPSHOTS. I'm using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I'm also using GraalVM 22.3. If you're using the fabulous SDKMAN utility, then you can do the following to get the exact same version of GraalVM that I have on my instance.
+
+[source,shell]
+----
+sdk install java 22.3.r17-grl
+----
+
+I've also added a few dependencies. We won't really touch on these dependencies in any great length, but they'll help us to demonstrate a few concepts, so I've added them.
+
+* Web (`org.springframework.boot` : `spring-boot-starter-web`)
+* Actuator (`org.springframework.boot` : `spring-boot-starter-actuator`)
+* Spring Data JDBC (`org.springframework.boot` : `spring-boot-starter-data-jdbc`)
+* H2 (`com.h2database` : `h2`)
+
+And of course I've got a normal Spring Boot entry class, which looks like this. I won't add anything to this class. I'll be creating new `@Configuration`-annotated classes in subpackages.
+
+[source,java]
+----
+include::{source}/com/example/aot/AotApplication.java[]
+----
+
+Let's look at our first application, a trivial and fairly typical application that - like any other trivial Spring Boot application - works with a database and surfaces an HTTP endpoint. You have seen this before.
+
+
+[source,java]
+-----
+include::{source}/com/example/aot/basics/BasicsConfiguration.java[]
+-----
+<1> look ma, no Lombok!
+<2> this is using Spring Data JDBC and you can too!
+
+You'll need some SQL schema, so add `src/main/resources/schema.sql` for our SQL interactions, so let's have Spring Boot create it for us on startup:
+
+[source,sql]
+----
+include::{root}/src/main/resources/schema.sql[]
+----
+
+Run the main class in your IDE or on the command line in the usual ways:
+
+[source,java]
+----
+mvn spring-boot:run
+----
+
+
+You should see some output on the console. It works. hurray. Moving on, let's see

@@ -7,7 +7,7 @@ Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know th
 
 == Introduction
 
-To really appreciate the magic of what's being introduced in Spring Boot 3, I find it's useful to understand where we were to appreciate where we are now. Traditional Spring applications have _phases_ that they go through when they're run. This isn't exactly what's happening, but here's a simplification of what's happening:
+I find it's useful to understand where we were to appreciate where we are now. Traditional Spring applications have _phases_ that they go through when they're run. This isn't exactly what's happening, but here's a simplification of what's happening:
 
 
 * `ingest` - the Spring application starts up and reads in all the sources of configuration. Remember: Spring Framework is a dependency management framework. It needs to know how your various objects are constructed, their lifecycles (constructors, `InitializingBean#afterPropertiesSet`,`@PostConstruct`, `DisposableBean#destroy`, @PreDestroy), etc. It reads the various configuration files from all the `@Configuration`-annotated classes in your application, through component scanning where Spring discovers classes annotated   with `@Component`. This component scanning also discovers classes annotated with annotations that themselves are annotated with `@Component`, like `@Service`, `@Repository`, @Controller`, and `@RestController`. It also reads in configuration from Spring's classic XML configuration format. (I don't use it, and haven't seen it in the wild in more than half a decade, but still...).
@@ -63,8 +63,16 @@ Run the main class in your IDE or on the command line in the usual ways:
 
 [source,java]
 ----
-mvn spring-boot:run
+mvn -DskipTests spring-boot:run
 ----
 
+You should see some output on the console. It works. hurray. Moving on, let's turn it into a native image, thusly:
 
-You should see some output on the console. It works. hurray. Moving on, let's see
+[source,shell]
+----
+mvn -Pnative -DskipTests native:compile
+----
+
+This'll take a minute to finish, so now's a good time to pour a cup of coffee, or tea. Maybe do a crossword puzzle. Reflect on the poor life choices you've made to get to this point where your JVM applications take around a minute. It's a bit dispiriting, isn't it? Always remember: good things come to those who wait!
+
+

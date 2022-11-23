@@ -19,9 +19,9 @@ I find it's useful to understand where we were to appreciate where we are now. T
 
 GraalVM is a dropin replacement for OpenJDK. It _is_ OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra mechanisms, but let's focus on the `native-image` compiler. Henceforth, when I say GraalVM, I'll be referring to the `native-image` compiler.
 
-== Getting Started
+== You Gotta Start Somewhere...
 
-To start, as always, we'll go to the https://start.spring.io[Spring Initialzr]. As of 24 November 2022, you'll be able to choose the final Spring Boot 3 general release. But as I write this, I need to use Spring Boot 3 SNAPSHOTS. I'm using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I'm also using GraalVM 22.3. If you're using the fabulous SDKMAN utility, then you can do the following to get the exact same version of GraalVM that I have on my instance.
+To start, as always, we'll go to the https://start.spring.io[Spring Initialzr (start.spring.io)]. On 24 November 2022, you'll be able to choose the final Spring Boot 3 general release. But as I write this, I need to use Spring Boot 3 SNAPSHOTS. I'm using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I'm also using GraalVM 22.3. If you're using the fabulous SDKMAN utility, then you can do the following to get the exact same version of GraalVM that I have on my instance.
 
 [source,shell]
 ----
@@ -75,4 +75,122 @@ mvn -Pnative -DskipTests native:compile
 
 This'll take a minute to finish, so now's a good time to pour a cup of coffee, or tea. Maybe do a crossword puzzle. Reflect on the poor life choices you've made to get to this point where your JVM applications take around a minute. It's a bit dispiriting, isn't it? Always remember: good things come to those who wait!
 
+You'll find the compiled binary in the `target` directory, named `aot`. Run it and you'll see it starts up in no time at all. Like a lightbulb! And, best part, you'll find that it takes very little memory. There are different ways to measure memory, but I find looking at the resident set size to be informative. Here's a script I sue to measure this stuff called `rss.sh`:
 
+
+[source,shell]
+-----
+#!/usr/bin/env bash
+PID=${1}
+RSS=`ps -o rss ${PID} | tail -n1`
+RSS=`bc <<< "scale=1; ${RSS}/1024"`
+echo "${PID}: ${RSS}M"
+-----
+
+It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out.  You can find the process identifier for the Spring Boot application in the console, towards the top of the output of the application. Take it and then pass it as the argument for `rss.sh`, thusly:
+
+[source,shell]
+-----
+./rss.sh <PID>
+-----
+
+I tend to get numbers just south of 100MB. Not bad! Don't believe me? How much RAM is your current JVM application taking? I'd be pleasantly surprised if it was a gigabyte or less! Imagine being able to deploy the same application for 1/10th the memory footprint!
+
+== The Spring component model
+
+So, we know the basic stuff's working. But Spring's got a rich, dynamic, multifaceted component model that can do some amazing things. Let's look at some examples, demonstrating a few interesting aspects of the Spring programming model, old and new(-ish) alike.
+
+=== Event Listeners
+
+Did you know that Spring has an event bus that you can use to publish and receive events in one component or another? Any component can fire an event (or more), and any component can listen to, consume, these events. There are two ways to consume events: with a bean of type `ApplicationListener<ApplicationEvent>`, or with the `@EventListener` annotation.
+
+Here's a simple example.
+
+[source,java]
+-----
+include::{source}/com/example/aot/events/EventsConfiguration.java[]
+-----
+<1> this is the first more traditional approach: a bean of type `ApplicationListener<T extends ApplicationEvent>`.
+<2> this is the newer style, which frees your code of any explicit dependencies on the Spring framework
+
+This example listens for two unrelated events: `WebServerInitializedEvent` tells when the embedded webserver has finished being initialized. The `ApplicationReadyEvent` gets called as late as possible, right before the application handles traffic.
+
+These are just a few of the events that Spring and Spring Boot emit as part of the lifecycle of an application.
+
+=== A Reusable Recipe for Object Creation
+
+Things are never easy. Sometimes objects require finessing and customization. Sometimes, creating an object becomes more complicated than just a simple constructor. It's useful to isolate this construction logic in a single place so that it is reusable. There are at least two patterns that describe this sort  of parameterized construction, besides a constructor:
+
+* the fluid builder pattern
+* the factory pattern
+
+There's nothing really to be done to support the first pattern. The second pattern, on the other hand, is well served by the `FactoryBean<T>`. When you register a class of type `FactoryBean<T>` in the Spring context, it is the _product_ (an isntance of type `T`) of that `FactoryBean<T>`, not the `FactoryBean<T>` itself, that is registered in the application context and made available for injection. Let's look at its use in a trivial example:
+
+[source,java]
+-----
+include::{source}/com/example/aot/factorybeans/FactoryBeansConfiguration.java[]
+-----
+<1> the `AnimalFactoryBean` produces an object of type `Animal`. But which? Well it depends on the parameters fed into the `FactoryBean`.
+<2> the client code injects the `Animal`, ignorant of the construction logic.
+
+=== Scopes
+
+Beans in Spring have a lifecycle that describes the lifetime of a given object. Unless you specify something specifically, the default scope is `singleton`.
+
+* `singleton` - a bean is created when the application starts up and is destroyed when the application shuts down. If a bean has mutable state, then that instance will be visible to all other beans in any other scopes. It's global.
+* `session` - a bean is created anew for each new HTTP Session. Each user with an HTTP session will have their own instance of the bean. Changes won't be visible to other clients.
+* `web` - each new HTTP request gets a new instance of the bean.
+* `thread` - beans are unique to each thread. Sort of like a `ThreadLocal`.
+
+And this mechanism is pluggable, too, so implementors may provide their own scopes, as well. Spring does this across the portfolio, in projects like Spring Web Flow and Spring Batch. You'll also see it in various third party projects like the Spring support for the Flowable workflow engine.
+
+[source,sql]
+----
+include::{source}/com/example/aot/scopes/ScopesConfiguration.java[]
+----
+<1> this bean is a `request` scoped, so it'll be created anew for each new incoming HTTP request.
+<2> this client-side should be different across different HTTP requests, but the same for successive requests during the same HTTP requests.
+<3> We want to make sure that Spring doesn't try to initialize this dependency until we need it, in the middle of an HTTP request. Otherwise, the `request` scope will attempt to resolve the current HTTP request, which won't exist when the application starts up.
+
+Try it out by accessing `http://localhost:8080/scopes/context`.
+
+=== Qualifiers
+
+Qualifiers are conceptually very simple: given two types with the same interface, how does Spring choose which to inject in a given place. The answer is that we _qualify_ the bean we'd like.
+
+Suppose we're trying to build two applications that work with two competing mobile phone marketplace implementations, like the Apple AppStore and Android's Play store.
+
+We might model them with an interface, which we're calling `MobileMarketplace`. In this example, we have two implementations of that interface, and we've used the `@Qualifier` annotation (and a `String` that we provide to distinguish one from the other) on both the bean itself and the place where the bean is injected to. As long as the `String` in the annotation matches, then the right implementation will be injected. This mechanism even goes a bit further:  you can put `@Qualifier` on a custom annotation of your own, and then use that annotation instead of `@Qualifier` directly on the various implementations. This helps you enforce an ubiquitous language. Let's look at an example:
+
+[source,java]
+-----
+include::{source}/com/example/aot/qualifiers/QualifiersConfiguration.java[]
+-----
+<1> this bean uses the `android` implementation
+<2> this bean uses the `apple` implementation
+<3> can't decide? Just inject a `Map<String,T>`, where `T` is the type you're looking for. Spring will provide a map of bean names to bean types.
+<4> here we create a meta annotation.
+<5> here we create an implementation of the interface
+
+
+I love that I can define a bean's qualifier using the `@Qualifier` annotation directly, and then inject it into a particular site using the meta annotation. Or, vice versa. Spring doesn't care. It just works.
+
+=== Properties
+
+Spring Framework provides the `Environment` abstraction, which is basically a mapping between a `String` key and a `String` value. How those values are resolved is pluggable, through `PropertyResolver` instances. Spring Boot can then take values in the `Environment` and map them to objects, either via setters or via the constructors of the objects. Here's an example:
+
+[source,java]
+-----
+include::{source}/com/example/aot/properties/PropertiesConfiguration.java[]
+-----
+<1> Here, we're injecting a Java object called `DemoProperties`, to which properties starting with `bootiful` are bound
+<2> the `@ConfigurationProperties` annotation wires Spring to inject properties on to an instance of `DemoProperties`.
+
+=== See How They Run
+
+You can compile and run all this code in the usual way as a GraalVM native image.
+
+[source,shell]
+----
+mvn -DskipTests native:compile && ./target/aot
+----

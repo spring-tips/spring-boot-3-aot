@@ -12,11 +12,13 @@ import org.springframework.context.annotation.Configuration;
 class PropertiesConfiguration {
 
     @Bean
-    ApplicationListener<ApplicationReadyEvent> propertiesApplicationListener(DemoProperties properties) {
+    ApplicationListener<ApplicationReadyEvent> propertiesApplicationListener( //<1>
+            DemoProperties properties) {
         return args -> System.out.println("the name is " + properties.name());
     }
 }
 
+// <2>
 @ConfigurationProperties(prefix = "bootiful")
 record DemoProperties(String name) {
 }

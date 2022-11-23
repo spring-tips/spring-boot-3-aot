@@ -14,22 +14,26 @@ import java.util.Map;
 @Configuration
 class QualifiersConfiguration {
 
+    // <1>
     @Bean
     ApplicationListener<ApplicationReadyEvent> android(@Android MobileMarketplace mobileMarketplace) {
         return event -> System.out.println(mobileMarketplace.getClass().toString());
     }
 
+    //<2>
     @Bean
     ApplicationListener<ApplicationReadyEvent> ios(@Apple MobileMarketplace mobileMarketplace) {
         return event -> System.out.println(mobileMarketplace.getClass().toString());
     }
 
+    //<3>
     @Bean
     ApplicationListener<ApplicationReadyEvent> mobileMarketplaceListener(Map<String, MobileMarketplace> mobileMarketplaces) {
         return event -> mobileMarketplaces.forEach((key, bean) -> System.out.println(key + '=' + bean.getClass().getName()));
     }
 }
 
+//<4>
 @Retention(RetentionPolicy.RUNTIME)
 @Qualifier("ios")
 @interface Apple {
@@ -43,6 +47,7 @@ class QualifiersConfiguration {
 interface MobileMarketplace {
 }
 
+//<5>
 @Service
 @Qualifier("ios")
 class AppStore implements MobileMarketplace {

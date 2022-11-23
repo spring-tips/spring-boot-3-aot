@@ -9,11 +9,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 class FactoryBeansConfiguration {
 
+    // <1>
     @Bean
     AnimalFactoryBean animalFactoryBean() {
         return new AnimalFactoryBean(true, false);
     }
 
+    // <2>
     @Bean
     ApplicationListener<ApplicationReadyEvent> factoryBeanListener(Animal animal) {
         return event -> animal.speak();
@@ -30,7 +32,7 @@ class AnimalFactoryBean implements FactoryBean<Animal> {
     }
 
     @Override
-    public Animal getObject() throws Exception {
+    public Animal getObject() {
         return (this.likesYarn && !this.likesFrisbees) ? new Cat() : new Dog();
     }
 

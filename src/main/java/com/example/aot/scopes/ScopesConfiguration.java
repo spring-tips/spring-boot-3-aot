@@ -4,9 +4,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.util.UUID;
@@ -15,31 +14,30 @@ import java.util.UUID;
 class ScopesConfiguration {
 }
 
+// <1>
+@Component
+@Scope(WebApplicationContext.SCOPE_REQUEST)
+class RequestContext {
 
-@Controller
-@ResponseBody
+    private final String uuid = UUID.randomUUID().toString(); //<2>
+
+    public String getUuid() {
+        return uuid;
+    }
+}
+
+@RestController
 class ContextHttpController {
 
-    private final RequestContext context ;
+    private final RequestContext context;
 
-    @Lazy
+    @Lazy // <3>
     ContextHttpController(RequestContext context) {
         this.context = context;
     }
 
-    @GetMapping ("/scopes/context")
-    String uuid (){
-        return this.context.getUuid() ;
-    }
-}
-
-@Component
-@Scope (WebApplicationContext.SCOPE_REQUEST)
-class RequestContext {
-
-    private final String uuid = UUID.randomUUID().toString();
-
-    public String getUuid() {
-        return uuid;
+    @GetMapping("/scopes/context")
+    String uuid() {
+        return this.context.getUuid();
     }
 }

@@ -478,10 +478,10 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </div>
 </div>
 <div class="sect1">
-<h2 id="_getting_started">Getting Started</h2>
+<h2 id="_you_gotta_start_somewhere">You Gotta Start Somewhere&#8230;&#8203;</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>To start, as always, we&#8217;ll go to the <a href="https://start.spring.io">Spring Initialzr</a>. As of 24 November 2022, you&#8217;ll be able to choose the final Spring Boot 3 general release. But as I write this, I need to use Spring Boot 3 SNAPSHOTS. I&#8217;m using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I&#8217;m also using GraalVM 22.3. If you&#8217;re using the fabulous SDKMAN utility, then you can do the following to get the exact same version of GraalVM that I have on my instance.</p>
+<p>To start, as always, we&#8217;ll go to the <a href="https://start.spring.io">Spring Initialzr (start.spring.io)</a>. On 24 November 2022, you&#8217;ll be able to choose the final Spring Boot 3 general release. But as I write this, I need to use Spring Boot 3 SNAPSHOTS. I&#8217;m using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I&#8217;m also using GraalVM 22.3. If you&#8217;re using the fabulous SDKMAN utility, then you can do the following to get the exact same version of GraalVM that I have on my instance.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -605,12 +605,436 @@ interface CustomerRepository extends CrudRepository&lt;Customer, Integer&gt; {
 <div class="paragraph">
 <p>This&#8217;ll take a minute to finish, so now&#8217;s a good time to pour a cup of coffee, or tea. Maybe do a crossword puzzle. Reflect on the poor life choices you&#8217;ve made to get to this point where your JVM applications take around a minute. It&#8217;s a bit dispiriting, isn&#8217;t it? Always remember: good things come to those who wait!</p>
 </div>
+<div class="paragraph">
+<p>You&#8217;ll find the compiled binary in the <code>target</code> directory, named <code>aot</code>. Run it and you&#8217;ll see it starts up in no time at all. Like a lightbulb! And, best part, you&#8217;ll find that it takes very little memory. There are different ways to measure memory, but I find looking at the resident set size to be informative. Here&#8217;s a script I sue to measure this stuff called <code>rss.sh</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">#!/usr/bin/env bash
+PID=${1}
+RSS=`ps -o rss ${PID} | tail -n1`
+RSS=`bc &lt;&lt;&lt; "scale=1; ${RSS}/1024"`
+echo "${PID}: ${RSS}M"</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out.  You can find the process identifier for the Spring Boot application in the console, towards the top of the output of the application. Take it and then pass it as the argument for <code>rss.sh</code>, thusly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">./rss.sh &lt;PID&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I tend to get numbers just south of 100MB. Not bad! Don&#8217;t believe me? How much RAM is your current JVM application taking? I&#8217;d be pleasantly surprised if it was a gigabyte or less! Imagine being able to deploy the same application for 1/10th the memory footprint!</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_spring_component_model">The Spring component model</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So, we know the basic stuff&#8217;s working. But Spring&#8217;s got a rich, dynamic, multifaceted component model that can do some amazing things. Let&#8217;s look at some examples, demonstrating a few interesting aspects of the Spring programming model, old and new(-ish) alike.</p>
+</div>
+<div class="sect2">
+<h3 id="_event_listeners">Event Listeners</h3>
+<div class="paragraph">
+<p>Did you know that Spring has an event bus that you can use to publish and receive events in one component or another? Any component can fire an event (or more), and any component can listen to, consume, these events. There are two ways to consume events: with a bean of type <code>ApplicationListener&lt;ApplicationEvent&gt;</code>, or with the <code>@EventListener</code> annotation.</p>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s a simple example.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.events;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
+
+@Configuration
+class EventsConfiguration {
+
+    // <b class="conum">(1)</b>
+    @Bean
+    ApplicationListener&lt;WebServerInitializedEvent&gt; webServerInitializedEventApplicationListener() {
+        return event -&gt; run("ApplicationListener&lt;WebServerInitializedEvent&gt;", event);
+    }
+
+    // <b class="conum">(2)</b>
+    @EventListener
+    public void eventListener(ApplicationReadyEvent event) {
+        run("@EventListener", event);
+    }
+
+    private void run(String where, ApplicationEvent are) {
+        System.out.println(where + " : " + are);
+    }
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this is the first more traditional approach: a bean of type <code>ApplicationListener&lt;T extends ApplicationEvent&gt;</code>.</p>
+</li>
+<li>
+<p>this is the newer style, which frees your code of any explicit dependencies on the Spring framework</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>This example listens for two unrelated events: <code>WebServerInitializedEvent</code> tells when the embedded webserver has finished being initialized. The <code>ApplicationReadyEvent</code> gets called as late as possible, right before the application handles traffic.</p>
+</div>
+<div class="paragraph">
+<p>These are just a few of the events that Spring and Spring Boot emit as part of the lifecycle of an application.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_a_reusable_recipe_for_object_creation">A Reusable Recipe for Object Creation</h3>
+<div class="paragraph">
+<p>Things are never easy. Sometimes objects require finessing and customization. Sometimes, creating an object becomes more complicated than just a simple constructor. It&#8217;s useful to isolate this construction logic in a single place so that it is reusable. There are at least two patterns that describe this sort  of parameterized construction, besides a constructor:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the fluid builder pattern</p>
+</li>
+<li>
+<p>the factory pattern</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>There&#8217;s nothing really to be done to support the first pattern. The second pattern, on the other hand, is well served by the <code>FactoryBean&lt;T&gt;</code>. When you register a class of type <code>FactoryBean&lt;T&gt;</code> in the Spring context, it is the <em>product</em> (an isntance of type <code>T</code>) of that <code>FactoryBean&lt;T&gt;</code>, not the <code>FactoryBean&lt;T&gt;</code> itself, that is registered in the application context and made available for injection. Let&#8217;s look at its use in a trivial example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.factorybeans;
+
+import org.springframework.beans.factory.FactoryBean;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+class FactoryBeansConfiguration {
+
+    // <b class="conum">(1)</b>
+    @Bean
+    AnimalFactoryBean animalFactoryBean() {
+        return new AnimalFactoryBean(true, false);
+    }
+
+    // <b class="conum">(2)</b>
+    @Bean
+    ApplicationListener&lt;ApplicationReadyEvent&gt; factoryBeanListener(Animal animal) {
+        return event -&gt; animal.speak();
+    }
+}
+
+class AnimalFactoryBean implements FactoryBean&lt;Animal&gt; {
+
+    private final boolean likesYarn, likesFrisbees;
+
+    AnimalFactoryBean(boolean likesYarn, boolean likesFrisbees) {
+        this.likesYarn = likesYarn;
+        this.likesFrisbees = likesFrisbees;
+    }
+
+    @Override
+    public Animal getObject() {
+        return (this.likesYarn &amp;&amp; !this.likesFrisbees) ? new Cat() : new Dog();
+    }
+
+    @Override
+    public Class&lt;?&gt; getObjectType() {
+        return Animal.class;
+    }
+}
+
+
+interface Animal {
+    void speak();
+}
+
+class Dog implements Animal {
+    @Override
+    public void speak() {
+        System.out.println("woof");
+    }
+}
+
+class Cat implements Animal {
+    @Override
+    public void speak() {
+        System.out.println("meow");
+    }
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>the <code>AnimalFactoryBean</code> produces an object of type <code>Animal</code>. But which? Well it depends on the parameters fed into the <code>FactoryBean</code>.</p>
+</li>
+<li>
+<p>the client code injects the <code>Animal</code>, ignorant of the construction logic.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_scopes">Scopes</h3>
+<div class="paragraph">
+<p>Beans in Spring have a lifecycle that describes the lifetime of a given object. Unless you specify something specifically, the default scope is <code>singleton</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>singleton</code> - a bean is created when the application starts up and is destroyed when the application shuts down. If a bean has mutable state, then that instance will be visible to all other beans in any other scopes. It&#8217;s global.</p>
+</li>
+<li>
+<p><code>session</code> - a bean is created anew for each new HTTP Session. Each user with an HTTP session will have their own instance of the bean. Changes won&#8217;t be visible to other clients.</p>
+</li>
+<li>
+<p><code>web</code> - each new HTTP request gets a new instance of the bean.</p>
+</li>
+<li>
+<p><code>thread</code> - beans are unique to each thread. Sort of like a <code>ThreadLocal</code>.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>And this mechanism is pluggable, too, so implementors may provide their own scopes, as well. Spring does this across the portfolio, in projects like Spring Web Flow and Spring Batch. You&#8217;ll also see it in various third party projects like the Spring support for the Flowable workflow engine.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">package com.example.aot.scopes;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.WebApplicationContext;
+
+import java.util.UUID;
+
+@Configuration
+class ScopesConfiguration {
+}
+
+// <b class="conum">(1)</b>
+@Component
+@Scope(WebApplicationContext.SCOPE_REQUEST)
+class RequestContext {
+
+    private final String uuid = UUID.randomUUID().toString(); //<b class="conum">(2)</b>
+
+    public String getUuid() {
+        return uuid;
+    }
+}
+
+@RestController
+class ContextHttpController {
+
+    private final RequestContext context;
+
+    @Lazy // <b class="conum">(3)</b>
+    ContextHttpController(RequestContext context) {
+        this.context = context;
+    }
+
+    @GetMapping("/scopes/context")
+    String uuid() {
+        return this.context.getUuid();
+    }
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this bean is a <code>request</code> scoped, so it&#8217;ll be created anew for each new incoming HTTP request.</p>
+</li>
+<li>
+<p>this client-side should be different across different HTTP requests, but the same for successive requests during the same HTTP requests.</p>
+</li>
+<li>
+<p>We want to make sure that Spring doesn&#8217;t try to initialize this dependency until we need it, in the middle of an HTTP request. Otherwise, the <code>request</code> scope will attempt to resolve the current HTTP request, which won&#8217;t exist when the application starts up.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Try it out by accessing <code><a href="http://localhost:8080/scopes/context" class="bare">http://localhost:8080/scopes/context</a></code>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_qualifiers">Qualifiers</h3>
+<div class="paragraph">
+<p>Qualifiers are conceptually very simple: given two types with the same interface, how does Spring choose which to inject in a given place. The answer is that we <em>qualify</em> the bean we&#8217;d like.</p>
+</div>
+<div class="paragraph">
+<p>Suppose we&#8217;re trying to build two applications that work with two competing mobile phone marketplace implementations, like the Apple AppStore and Android&#8217;s Play store.</p>
+</div>
+<div class="paragraph">
+<p>We might model them with an interface, which we&#8217;re calling <code>MobileMarketplace</code>. In this example, we have two implementations of that interface, and we&#8217;ve used the <code>@Qualifier</code> annotation (and a <code>String</code> that we provide to distinguish one from the other) on both the bean itself and the place where the bean is injected to. As long as the <code>String</code> in the annotation matches, then the right implementation will be injected. This mechanism even goes a bit further:  you can put <code>@Qualifier</code> on a custom annotation of your own, and then use that annotation instead of <code>@Qualifier</code> directly on the various implementations. This helps you enforce an ubiquitous language. Let&#8217;s look at an example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.qualifiers;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Service;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.Map;
+
+@Configuration
+class QualifiersConfiguration {
+
+    // <b class="conum">(1)</b>
+    @Bean
+    ApplicationListener&lt;ApplicationReadyEvent&gt; android(@Android MobileMarketplace mobileMarketplace) {
+        return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
+    }
+
+    //<b class="conum">(2)</b>
+    @Bean
+    ApplicationListener&lt;ApplicationReadyEvent&gt; ios(@Apple MobileMarketplace mobileMarketplace) {
+        return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
+    }
+
+    //<b class="conum">(3)</b>
+    @Bean
+    ApplicationListener&lt;ApplicationReadyEvent&gt; mobileMarketplaceListener(Map&lt;String, MobileMarketplace&gt; mobileMarketplaces) {
+        return event -&gt; mobileMarketplaces.forEach((key, bean) -&gt; System.out.println(key + '=' + bean.getClass().getName()));
+    }
+}
+
+//<b class="conum">(4)</b>
+@Retention(RetentionPolicy.RUNTIME)
+@Qualifier("ios")
+@interface Apple {
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Qualifier("android")
+@interface Android {
+}
+
+interface MobileMarketplace {
+}
+
+//<b class="conum">(5)</b>
+@Service
+@Qualifier("ios")
+class AppStore implements MobileMarketplace {
+}
+
+@Service
+@Qualifier("android")
+class PlayStore implements MobileMarketplace {
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this bean uses the <code>android</code> implementation</p>
+</li>
+<li>
+<p>this bean uses the <code>apple</code> implementation</p>
+</li>
+<li>
+<p>can&#8217;t decide? Just inject a <code>Map&lt;String,T&gt;</code>, where <code>T</code> is the type you&#8217;re looking for. Spring will provide a map of bean names to bean types.</p>
+</li>
+<li>
+<p>here we create a meta annotation.</p>
+</li>
+<li>
+<p>here we create an implementation of the interface</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>I love that I can define a bean&#8217;s qualifier using the <code>@Qualifier</code> annotation directly, and then inject it into a particular site using the meta annotation. Or, vice versa. Spring doesn&#8217;t care. It just works.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_properties">Properties</h3>
+<div class="paragraph">
+<p>Spring Framework provides the <code>Environment</code> abstraction, which is basically a mapping between a <code>String</code> key and a <code>String</code> value. How those values are resolved is pluggable, through <code>PropertyResolver</code> instances. Spring Boot can then take values in the <code>Environment</code> and map them to objects, either via setters or via the constructors of the objects. Here&#8217;s an example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.properties;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@EnableConfigurationProperties(DemoProperties.class)
+class PropertiesConfiguration {
+
+    @Bean
+    ApplicationListener&lt;ApplicationReadyEvent&gt; propertiesApplicationListener( //<b class="conum">(1)</b>
+            DemoProperties properties) {
+        return args -&gt; System.out.println("the name is " + properties.name());
+    }
+}
+
+// <b class="conum">(2)</b>
+@ConfigurationProperties(prefix = "bootiful")
+record DemoProperties(String name) {
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>Here, we&#8217;re injecting a Java object called <code>DemoProperties</code>, to which properties starting with <code>bootiful</code> are bound</p>
+</li>
+<li>
+<p>the <code>@ConfigurationProperties</code> annotation wires Spring to inject properties on to an instance of <code>DemoProperties</code>.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_see_how_they_run">See How They Run</h3>
+<div class="paragraph">
+<p>You can compile and run all this code in the usual way as a GraalVM native image.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">mvn -DskipTests native:compile &amp;&amp; ./target/aot</code></pre>
+</div>
+</div>
+</div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-11-22 14:38:56 -0800
+Last updated 2022-11-22 18:41:30 -0800
 </div>
 </div>
 </body>

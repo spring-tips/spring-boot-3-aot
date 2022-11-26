@@ -78,7 +78,7 @@ class LoggedBeanPostProcessor implements SmartInstantiationAwareBeanPostProcesso
 @Service
 class OrderService {
 
-    void addToPrices(double amount) {
+   public void addToPrices(double amount) {
         System.out.println("adding $" + amount);
     }
 }

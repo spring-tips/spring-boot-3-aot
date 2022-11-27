@@ -149,8 +149,8 @@ And this mechanism is pluggable, too, so implementors may provide their own scop
 include::{source}/com/example/aot/scopes/ScopesConfiguration.java[]
 ----
 <1> this bean is a `request` scoped, so it'll be created anew for each new incoming HTTP request.
-<2> this client-side should be different across different HTTP requests, but the same for successive requests during the same HTTP requests.
-<3> We want to make sure that Spring doesn't try to initialize this dependency until we need it, in the middle of an HTTP request. Otherwise, the `request` scope will attempt to resolve the current HTTP request, which won't exist when the application starts up.
+<2> this request-scoped bean should be different across different HTTP requests, but the same for successive accesses during the same HTTP request.
+<3> Spring is giving us a proxy, which won't be initialized with real values until the bean starts its lifecycle, bound to whatever externalities govern them.
 
 Try it out by accessing `http://localhost:8080/scopes/context`.
 
@@ -194,3 +194,8 @@ You can compile and run all this code in the usual way as a GraalVM native image
 ----
 mvn -DskipTests native:compile && ./target/aot
 ----
+
+Run the application and you should see all the output from the previous examples, as expected. The best part? It'll have started in no time at all, and be a far sight smaller as a binary and as a process occupying RAM. You can use the script we introduced above to measure the process' Resident Set Size (RSS).
+
+== Processing the Bean Factory
+

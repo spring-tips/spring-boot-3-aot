@@ -197,5 +197,33 @@ mvn -DskipTests native:compile && ./target/aot
 
 Run the application and you should see all the output from the previous examples, as expected. The best part? It'll have started in no time at all, and be a far sight smaller as a binary and as a process occupying RAM. You can use the script we introduced above to measure the process' Resident Set Size (RSS).
 
+== Detecting that you're in a Native Image
+
+Sometimes, hopefully not often, but sometimes you'll want to know whether your code is running in a native image context. This is useful because, as good as Spring's AOT engine is, we can't make it work perfectly in every situation, short of reviewing every line of code ever written. There are oddities that arise from working in a GraalVM native image, and it's important to be aware of those.
+
+
+There is, mercifully, one useful System property that you can use here: `org.graalvm.nativeimage.imagecode`.  We've encapsulated that check in `NativeDetector.inNativeImage()`. Here it is in action.
+
+[source,java]
+----
+include::{source}/com/example/aot/detection/DetectionConfiguration.java[]
+----
+
+Run it on the JRE and it'll return `false`. Run it in a GraalVM native image, and it'll return `true`.
+
+My first instinct when I learned about that property was to wrap it in a `Condition` object, and then use `@Conditional` to call that `Condition`, and thus make beans available in the Spring `BeanFactory` _conditionally_. I tried it, and it didn't work. Here's why.
+
+Recall our discussion around the _phases_ of a Spring Boot application. It starts up, _ingests_ all the configuration, then creates a meta model representation of the beans (`BeanDefinition`s). Then, finally, it creates all those beans out of those `BeanDefinition`s.
+
+In an AOT application intended for GraalVM native image compilation, Spring creates a `BeanFactory` with `BeanDefinition` and then stops there. It lets code inspect the various beans in the `BeanFactory` and then that code writes out an optimized version of the `BeanFactory`, skipping all the ingest and going straight to the live beans, for use in the GraalVM native image context. An important part of this is that it does this _only for the beans that are present in the `BeanFactory` during compilation.
+
+There are two things that can dynamically change the beans in a given `BeanFactory`: conditionals, and profiles. I'd strongly urge you to avoid using profiles, and a handful of conditionals, if you intend to go to a GraalVM native image.
+
+Profiles only work if you activate the profile during compilation. The profiles must be evaluated at compile time. Otherwise, beans not in an active profile won won't be present in the native image heap and thus can't be activated at runtime.
+
+Conditions are evaluated at compile time. The conditions that are invariant at compilation time and runtime - like `@ConditionalOnClass` and `@ConditionalOnProperty` - work just fine in the native world: the classes present at compile time are by definition the classes present at runtime. Some conditions depend on ambient state, however, like whether you're running in a Kubernetes cluster (`@ConditionalOnCloudPlatform(Kubernetes)`). Avoid these, unless you plan on compiling your code in a Kubernetes cluster.
+
+
+
 == Processing the Bean Factory
 

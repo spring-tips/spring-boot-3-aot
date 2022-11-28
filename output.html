@@ -819,13 +819,13 @@ class Cat implements Animal {
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.annotation.RequestScope;
 
 import java.util.UUID;
+
 
 @Configuration
 class ScopesConfiguration {
@@ -833,7 +833,7 @@ class ScopesConfiguration {
 
 // <b class="conum">(1)</b>
 @Component
-@Scope(WebApplicationContext.SCOPE_REQUEST)
+@RequestScope
 class RequestContext {
 
     private final String uuid = UUID.randomUUID().toString(); //<b class="conum">(2)</b>
@@ -848,7 +848,7 @@ class ContextHttpController {
 
     private final RequestContext context;
 
-    @Lazy // <b class="conum">(3)</b>
+    // <b class="conum">(3)</b>
     ContextHttpController(RequestContext context) {
         this.context = context;
     }
@@ -866,10 +866,10 @@ class ContextHttpController {
 <p>this bean is a <code>request</code> scoped, so it&#8217;ll be created anew for each new incoming HTTP request.</p>
 </li>
 <li>
-<p>this client-side should be different across different HTTP requests, but the same for successive requests during the same HTTP requests.</p>
+<p>this request-scoped bean should be different across different HTTP requests, but the same for successive accesses during the same HTTP request.</p>
 </li>
 <li>
-<p>We want to make sure that Spring doesn&#8217;t try to initialize this dependency until we need it, in the middle of an HTTP request. Otherwise, the <code>request</code> scope will attempt to resolve the current HTTP request, which won&#8217;t exist when the application starts up.</p>
+<p>Spring is giving us a proxy, which won&#8217;t be initialized with real values until the bean starts its lifecycle, bound to whatever externalities govern them.</p>
 </li>
 </ol>
 </div>
@@ -1028,13 +1028,74 @@ record DemoProperties(String name) {
 <pre class="highlight"><code class="language-shell" data-lang="shell">mvn -DskipTests native:compile &amp;&amp; ./target/aot</code></pre>
 </div>
 </div>
+<div class="paragraph">
+<p>Run the application and you should see all the output from the previous examples, as expected. The best part? It&#8217;ll have started in no time at all, and be a far sight smaller as a binary and as a process occupying RAM. You can use the script we introduced above to measure the process' Resident Set Size (RSS).</p>
 </div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_detecting_that_youre_in_a_native_image">Detecting that you&#8217;re in a Native Image</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Sometimes, hopefully not often, but sometimes you&#8217;ll want to know whether your code is running in a native image context. This is useful because, as good as Spring&#8217;s AOT engine is, we can&#8217;t make it work perfectly in every situation, short of reviewing every line of code ever written. There are oddities that arise from working in a GraalVM native image, and it&#8217;s important to be aware of those.</p>
+</div>
+<div class="paragraph">
+<p>There is, mercifully, one useful System property that you can use here: <code>org.graalvm.nativeimage.imagecode</code>.  We&#8217;ve encapsulated that check in <code>NativeDetector.inNativeImage()</code>. Here it is in action.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.detection;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.NativeDetector;
+
+@Configuration
+class DetectionConfiguration {
+
+    @Bean
+    ApplicationListener&lt;ApplicationReadyEvent&gt; detectionListener() {
+        return args -&gt; System.out.println("is native image? " + NativeDetector.inNativeImage());
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Run it on the JRE and it&#8217;ll return <code>false</code>. Run it in a GraalVM native image, and it&#8217;ll return <code>true</code>.</p>
+</div>
+<div class="paragraph">
+<p>My first instinct when I learned about that property was to wrap it in a <code>Condition</code> object, and then use <code>@Conditional</code> to call that <code>Condition</code>, and thus make beans available in the Spring <code>BeanFactory</code> <em>conditionally</em>. I tried it, and it didn&#8217;t work. Here&#8217;s why.</p>
+</div>
+<div class="paragraph">
+<p>Recall our discussion around the <em>phases</em> of a Spring Boot application. It starts up, <em>ingests</em> all the configuration, then creates a meta model representation of the beans (`BeanDefinition`s). Then, finally, it creates all those beans out of those `BeanDefinition`s.</p>
+</div>
+<div class="paragraph">
+<p>In an AOT application intended for GraalVM native image compilation, Spring creates a <code>BeanFactory</code> with <code>BeanDefinition</code> and then stops there. It lets code inspect the various beans in the <code>BeanFactory</code> and then that code writes out an optimized version of the <code>BeanFactory</code>, skipping all the ingest and going straight to the live beans, for use in the GraalVM native image context. An important part of this is that it does this _only for the beans that are present in the <code>BeanFactory</code> during compilation.</p>
+</div>
+<div class="paragraph">
+<p>There are two things that can dynamically change the beans in a given <code>BeanFactory</code>: conditionals, and profiles. I&#8217;d strongly urge you to avoid using profiles, and a handful of conditionals, if you intend to go to a GraalVM native image.</p>
+</div>
+<div class="paragraph">
+<p>Profiles only work if you activate the profile during compilation. The profiles must be evaluated at compile time. Otherwise, beans not in an active profile won won&#8217;t be present in the native image heap and thus can&#8217;t be activated at runtime.</p>
+</div>
+<div class="paragraph">
+<p>Conditions are evaluated at compile time. The conditions that are invariant at compilation time and runtime - like <code>@ConditionalOnClass</code> and <code>@ConditionalOnProperty</code> - work just fine in the native world: the classes present at compile time are by definition the classes present at runtime. Some conditions depend on ambient state, however, like whether you&#8217;re running in a Kubernetes cluster (<code>@ConditionalOnCloudPlatform(Kubernetes)</code>). Avoid these, unless you plan on compiling your code in a Kubernetes cluster.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_processing_the_bean_factory">Processing the Bean Factory</h2>
+<div class="sectionbody">
+
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-11-22 18:41:30 -0800
+Last updated 2022-11-28 09:47:20 -0800
 </div>
 </div>
 </body>

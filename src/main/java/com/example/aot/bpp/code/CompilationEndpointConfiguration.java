@@ -20,93 +20,80 @@ import java.util.concurrent.ConcurrentHashMap;
 @Configuration
 class CompilationEndpointConfiguration {
 
-    @Bean
-    CompilationEndpoint compilationEndpoint() {
-        return new CompilationEndpoint();
-    }
+	@Bean
+	CompilationEndpoint compilationEndpoint() {
+		return new CompilationEndpoint();
+	}
 
-    @Bean
-    CompilationEndpointBeanRegistrationAotProcessor compilationEndpointBeanRegistrationAotProcessor() {
-        return new CompilationEndpointBeanRegistrationAotProcessor();
-    }
+	@Bean
+	CompilationEndpointBeanRegistrationAotProcessor compilationEndpointBeanRegistrationAotProcessor() {
+		return new CompilationEndpointBeanRegistrationAotProcessor();
+	}
 
-    @Bean
-    ApplicationListener<ApplicationReadyEvent> compilationEndpointListener(CompilationEndpoint endpoint) {
-        return event -> {
-            var map = endpoint.compilation();
-            for (var e : map.entrySet()) {
-                System.out.println(e.getKey() + '=' + e.getValue());
-            }
-        };
-    }
+	@Bean
+	ApplicationListener<ApplicationReadyEvent> compilationEndpointListener(CompilationEndpoint endpoint) {
+		return event -> {
+			var map = endpoint.compilation();
+			for (var e : map.entrySet()) {
+				System.out.println(e.getKey() + '=' + e.getValue());
+			}
+		};
+	}
 
 }
 
-
 class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistrationAotProcessor {
 
-    @Override
-    public BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
+	@Override
+	public BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
 
-        if (!CompilationEndpoint.class.isAssignableFrom(registeredBean.getBeanClass()))
-            return null;
+		if (!CompilationEndpoint.class.isAssignableFrom(registeredBean.getBeanClass()))
+			return null;
 
-        return (ctx, code) -> {
+		return (ctx, code) -> {
 
-            var generatedClasses = ctx.getGeneratedClasses();
+			var generatedClasses = ctx.getGeneratedClasses();
 
-            var generatedClass = generatedClasses
-                    .getOrAddForFeatureComponent(CompilationEndpoint.class.getSimpleName() + "Feature",
-                            CompilationEndpoint.class, b -> b.addModifiers(Modifier.PUBLIC));
+			var generatedClass = generatedClasses.getOrAddForFeatureComponent(
+					CompilationEndpoint.class.getSimpleName() + "Feature", CompilationEndpoint.class,
+					b -> b.addModifiers(Modifier.PUBLIC));
 
-            var generatedMethod = generatedClass
-                    .getMethods()
-                    .add("postProcessCompilationEndpoint", build -> {
+			var generatedMethod = generatedClass.getMethods().add("postProcessCompilationEndpoint", build -> {
 
-                        var outputBeanVariableName = "outputBean";
-                        build.addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                                .addParameter(RegisteredBean.class, "registeredBean")
-                                .addParameter(CompilationEndpoint.class, "inputBean")
-                                .returns(CompilationEndpoint.class)
-                                .addCode(
-                                        CodeBlock
-                                                .builder()
-                                                .addStatement(
-                                                        "$T $L = new $T( $T.ofEpochMilli($L), new $T($S))",
-                                                        CompilationEndpoint.class,
-                                                        outputBeanVariableName,
-                                                        CompilationEndpoint.class,
-                                                        Instant.class,
-                                                        System.currentTimeMillis() + "L",
-                                                        File.class,
-                                                        new File(".").getAbsolutePath()
+				var outputBeanVariableName = "outputBean";
+				build.addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+						.addParameter(RegisteredBean.class, "registeredBean")
+						.addParameter(CompilationEndpoint.class, "inputBean").returns(CompilationEndpoint.class)
+						.addCode(CodeBlock.builder()
+								.addStatement("$T $L = new $T( $T.ofEpochMilli($L), new $T($S))",
+										CompilationEndpoint.class, outputBeanVariableName, CompilationEndpoint.class,
+										Instant.class, System.currentTimeMillis() + "L", File.class,
+										new File(".").getAbsolutePath()
 
-                                                )
-                                                .addStatement("return $L", outputBeanVariableName)
-                                                .build()
-                                );
-                    });
-            var methodReference = generatedMethod.toMethodReference();
-            code.addInstancePostProcessor(methodReference);
-        };
-    }
+								).addStatement("return $L", outputBeanVariableName).build());
+			});
+			var methodReference = generatedMethod.toMethodReference();
+			code.addInstancePostProcessor(methodReference);
+		};
+	}
+
 }
 
 @Endpoint(id = "compilation")
 class CompilationEndpoint {
 
-    private final Map<String, Object> map = new ConcurrentHashMap<>();
+	private final Map<String, Object> map = new ConcurrentHashMap<>();
 
-    CompilationEndpoint() { // default runtime version
-    }
+	CompilationEndpoint() { // default runtime version
+	}
 
-    CompilationEndpoint(Instant instant, File directory) {
-        map.putAll(Map.of("instant", instant, "directory", directory));
-    }
+	CompilationEndpoint(Instant instant, File directory) {
+		map.putAll(Map.of("instant", instant, "directory", directory));
+	}
 
-    @ReadOperation
-    public Map<String, Object> compilation() {
-        return Map.of("compilation", this.map, "now", Instant.now());
-    }
+	@ReadOperation
+	public Map<String, Object> compilation() {
+		return Map.of("compilation", this.map, "now", Instant.now());
+	}
 
 }

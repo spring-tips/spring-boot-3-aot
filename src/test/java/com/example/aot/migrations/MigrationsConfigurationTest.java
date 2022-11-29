@@ -7,15 +7,15 @@ import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
 
 class MigrationsConfigurationTest {
 
-    @Test
-    void hints() throws Exception {
+	@Test
+	void hints() throws Exception {
 
-        var hints = new RuntimeHints();
-        var registrar = new MigrationsConfiguration.MigrationsRuntimeHintsRegistrar();
-        var classloader = getClass().getClassLoader();
-        registrar.registerHints(hints, classloader);
-        Assertions.assertThat(RuntimeHintsPredicates.resource().forResource("data.csv"))
-                .accepts(hints);
+		var hints = new RuntimeHints();
+		var registrar = new MigrationsConfiguration.MigrationsRuntimeHintsRegistrar();
+		var classloader = getClass().getClassLoader();
+		registrar.registerHints(hints, classloader);
+		Assertions.assertThat(RuntimeHintsPredicates.resource().forResource("data.csv")).accepts(hints);
 
-    }
+	}
+
 }

@@ -227,3 +227,28 @@ Conditions are evaluated at compile time. The conditions that are invariant at c
 
 == Processing the Bean Factory
 
+We've talked about the `BeanFactory`. It's basically a container, an aggregation, of all the beans in your application. In earlier sections we saw that the beans in the `BeanFactory` are created as `BeanDefinition` instances. These `BeanDefinition`s are the metamodel representation of your object graph. They describe all the dependencies, constructors, annotations, fields, etc., related to your bean instances.
+
+Spring makes it trivial to act on those collection of `BeanDefinition` instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The `BeanFactoryPostProcessor` is a callback interface that lets us have access to the `BeanFactory` and to manipulate the `BeanDefinition` instances. We can regiser new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The `BeanFactory` is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrealla project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot appliations deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analuzing the `BeanFactory`, identifying infrastructure-related beans like `javax.sql.DataSource`, and then replacing them with a new bean of an identical interface, but with a connection pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a `DataSource` talking to an embedded H2 instance on your loccal machine, but when you deploy it, this `BeanFactoryPostProcessor` identifies connection strings in environment variables in the process space for the application and uses that to create a proper `DataSource` talking to that managed infrastructure, presumably on another host and port. And this was all transprent to the user, which is what we want.
+
+The `BeanFactoryPostProcessor` is a great place to see _everything_ in the `BeanFactory` all in one place when the application starts up.
+
+the `BeanFactoryInitializationAotProcessor` is a new itnerface that is sort of a peer t the `BeanFactoryPostProcessor`. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) whuile analyzing the `BeanDefinition`s in the application.
+
+It's important that you work only in terms of the `BeanDefinition` instances and bean names, in botht hese interfaces. Remember, at this point Spring hasn't created any of theb eans. So, while you'll be able to call `BeanFactory#getBean(String)`, it'll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don't do this - it'll really screw things up!
+
+
+Let's look a trivial example. We'll write a `BeanFactoryPostProcessor` that analyzes programmatically registers a new `BeanDefinition` in the application context. Would you ever nee dto do this? No. but it's hopefully illustrative. We'll use a subclass of `BeanFactoryPostProcessor` called `BeanDefinitionRegistryPostProcessor`, which gives us a `BeanFactory` downcast to a specific subtype that supports programatically registering new beans. The trouble is that this bean we'll register is going to require some reflection usign the Jackson JSON API, so well need to also register a GraalVM hint for it using a `BeanFactoryInitializationAotProcessor` contribution.
+
+
+[source,java]
+----
+include::{source}/com/example/aot/bfpp/BfppConfiguration.java[]
+----
+<1> were going to work with the same bean both at compile time and at runtime. So, I've stashed a variable with the name of the bean here for access from both interfaces at both phases
+<2> Note that the bean definitions here are registered with the `static` keyword. Spring will involve these beans very early in the lifecycle of the application context. It won't have any livefire beans except for these very early beans. So, we use `static` to avoid depending on anything from the `BeanFactory`. And don't force Spring to construct the `@Configuration` class containing the `@Bean` registration methods, too.
+<3> the `Listener` is a trivla `ApplicationListener` that, wehn run, will iterate over a collection of dummy DTOs and print them out using Jackson for JSON serialization. This serialization involves reflection, for wihch we'll need to furnish hints.
+<4> the first callback, the `ListenerBeanFactoryPostProcessor`, programatically registers a new `BeanDefinition` of type `Listener` if a bean of the name we've specified in the variable doesn't already exist in the context. This object runs at runtime, in both the JRE and the AOT application. Here were changing, molding, the `BeanFactory`.
+<5> when we compile the application using the AOT engine, intending to biold a graalvm native image, Spring Boot will aso run the the `ListenerBeeanFactoryInitializationAotProcessor`, which - knoiwing that we'll eventually register a `Listener` bean - furnishes the requisite hints to make the JSON serialization of the `Product` records work.
+
+These two itnerfaces work well together. They complement each other.

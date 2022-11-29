@@ -21,43 +21,41 @@ import java.util.stream.Stream;
 @RegisterReflectionForBinding(Person.class)
 class MigrationsConfiguration {
 
-    @Bean
-    @ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
-    ApplicationListener<ApplicationReadyEvent> peopleListener(
-            ObjectMapper objectMapper,
-            @Value("classpath:/data.csv") Resource csv) {
-        return new ApplicationListener<ApplicationReadyEvent>() {
-            @SneakyThrows
-            @Override
-            public void onApplicationEvent(ApplicationReadyEvent event) {
-                try (var in = new InputStreamReader(csv.getInputStream())) {
-                    var csvData = FileCopyUtils.copyToString(in);
-                    Stream.of(csvData.split(System.lineSeparator()))
-                            .map(line -> line.split(","))
-                            .map(row -> new Person(row[0], row[1]))
-                            .map(person -> json(person, objectMapper))
-                            .forEach(System.out::println);
-                }
+	@Bean
+	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
+	ApplicationListener<ApplicationReadyEvent> peopleListener(ObjectMapper objectMapper,
+			@Value("classpath:/data.csv") Resource csv) {
+		return new ApplicationListener<ApplicationReadyEvent>() {
+			@SneakyThrows
+			@Override
+			public void onApplicationEvent(ApplicationReadyEvent event) {
+				try (var in = new InputStreamReader(csv.getInputStream())) {
+					var csvData = FileCopyUtils.copyToString(in);
+					Stream.of(csvData.split(System.lineSeparator())).map(line -> line.split(","))
+							.map(row -> new Person(row[0], row[1])).map(person -> json(person, objectMapper))
+							.forEach(System.out::println);
+				}
 
-            }
-        };
-    }
+			}
+		};
+	}
 
-    @SneakyThrows
-    private static String json(Person person, ObjectMapper objectMapper) {
-        return objectMapper.writeValueAsString(person);
-    }
+	@SneakyThrows
+	private static String json(Person person, ObjectMapper objectMapper) {
+		return objectMapper.writeValueAsString(person);
+	}
 
-    static class MigrationsRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
+	static class MigrationsRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
 
-        @Override
-        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-//        hints.reflection().registerType(Person.class, MemberCategory.values());
-            hints.resources().registerPattern("data.csv");
-        }
-    }
+		@Override
+		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+			// hints.reflection().registerType(Person.class, MemberCategory.values());
+			hints.resources().registerPattern("data.csv");
+		}
+
+	}
+
 }
-
 
 record Person(String id, String name) {
 }

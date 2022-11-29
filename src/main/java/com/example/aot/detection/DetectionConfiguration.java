@@ -9,8 +9,9 @@ import org.springframework.core.NativeDetector;
 @Configuration
 class DetectionConfiguration {
 
-    @Bean
-    ApplicationListener<ApplicationReadyEvent> detectionListener() {
-        return args -> System.out.println("is native image? " + NativeDetector.inNativeImage());
-    }
+	@Bean
+	ApplicationListener<ApplicationReadyEvent> detectionListener() {
+		return args -> System.out.println("is native image? " + NativeDetector.inNativeImage());
+	}
+
 }

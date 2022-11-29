@@ -546,13 +546,13 @@ import java.util.stream.Stream;
 @Configuration
 class BasicsConfiguration {
 
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; basicsApplicationListener(
-            CustomerRepository repository) {
-        return event -&gt; repository //
-                .saveAll(Stream.of("A", "B", "C").map(name -&gt; new Customer(null, name)).toList()) //
-                .forEach(System.out::println);
-    }
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; basicsApplicationListener(CustomerRepository repository) {
+		return event -&gt; repository //
+				.saveAll(Stream.of("A", "B", "C").map(name -&gt; new Customer(null, name)).toList()) //
+				.forEach(System.out::println);
+	}
+
 }
 
 // <b class="conum">(1)</b>
@@ -561,6 +561,7 @@ record Customer(@Id Integer id, String name) {
 
 // <b class="conum">(2)</b>
 interface CustomerRepository extends CrudRepository&lt;Customer, Integer&gt; {
+
 }</code></pre>
 </div>
 </div>
@@ -659,21 +660,22 @@ import org.springframework.context.event.EventListener;
 @Configuration
 class EventsConfiguration {
 
-    // <b class="conum">(1)</b>
-    @Bean
-    ApplicationListener&lt;WebServerInitializedEvent&gt; webServerInitializedEventApplicationListener() {
-        return event -&gt; run("ApplicationListener&lt;WebServerInitializedEvent&gt;", event);
-    }
+	// <b class="conum">(1)</b>
+	@Bean
+	ApplicationListener&lt;WebServerInitializedEvent&gt; webServerInitializedEventApplicationListener() {
+		return event -&gt; run("ApplicationListener&lt;WebServerInitializedEvent&gt;", event);
+	}
 
-    // <b class="conum">(2)</b>
-    @EventListener
-    public void eventListener(ApplicationReadyEvent event) {
-        run("@EventListener", event);
-    }
+	// <b class="conum">(2)</b>
+	@EventListener
+	public void eventListener(ApplicationReadyEvent event) {
+		run("@EventListener", event);
+	}
 
-    private void run(String where, ApplicationEvent are) {
-        System.out.println(where + " : " + are);
-    }
+	private void run(String where, ApplicationEvent are) {
+		System.out.println(where + " : " + are);
+	}
+
 }</code></pre>
 </div>
 </div>
@@ -725,56 +727,63 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 class FactoryBeansConfiguration {
 
-    // <b class="conum">(1)</b>
-    @Bean
-    AnimalFactoryBean animalFactoryBean() {
-        return new AnimalFactoryBean(true, false);
-    }
+	// <b class="conum">(1)</b>
+	@Bean
+	AnimalFactoryBean animalFactoryBean() {
+		return new AnimalFactoryBean(true, false);
+	}
 
-    // <b class="conum">(2)</b>
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; factoryBeanListener(Animal animal) {
-        return event -&gt; animal.speak();
-    }
+	// <b class="conum">(2)</b>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; factoryBeanListener(Animal animal) {
+		return event -&gt; animal.speak();
+	}
+
 }
 
 class AnimalFactoryBean implements FactoryBean&lt;Animal&gt; {
 
-    private final boolean likesYarn, likesFrisbees;
+	private final boolean likesYarn, likesFrisbees;
 
-    AnimalFactoryBean(boolean likesYarn, boolean likesFrisbees) {
-        this.likesYarn = likesYarn;
-        this.likesFrisbees = likesFrisbees;
-    }
+	AnimalFactoryBean(boolean likesYarn, boolean likesFrisbees) {
+		this.likesYarn = likesYarn;
+		this.likesFrisbees = likesFrisbees;
+	}
 
-    @Override
-    public Animal getObject() {
-        return (this.likesYarn &amp;&amp; !this.likesFrisbees) ? new Cat() : new Dog();
-    }
+	@Override
+	public Animal getObject() {
+		return (this.likesYarn &amp;&amp; !this.likesFrisbees) ? new Cat() : new Dog();
+	}
 
-    @Override
-    public Class&lt;?&gt; getObjectType() {
-        return Animal.class;
-    }
+	@Override
+	public Class&lt;?&gt; getObjectType() {
+		return Animal.class;
+	}
+
 }
 
-
 interface Animal {
-    void speak();
+
+	void speak();
+
 }
 
 class Dog implements Animal {
-    @Override
-    public void speak() {
-        System.out.println("woof");
-    }
+
+	@Override
+	public void speak() {
+		System.out.println("woof");
+	}
+
 }
 
 class Cat implements Animal {
-    @Override
-    public void speak() {
-        System.out.println("meow");
-    }
+
+	@Override
+	public void speak() {
+		System.out.println("meow");
+	}
+
 }</code></pre>
 </div>
 </div>
@@ -826,9 +835,9 @@ import org.springframework.web.context.annotation.RequestScope;
 
 import java.util.UUID;
 
-
 @Configuration
 class ScopesConfiguration {
+
 }
 
 // <b class="conum">(1)</b>
@@ -836,27 +845,29 @@ class ScopesConfiguration {
 @RequestScope
 class RequestContext {
 
-    private final String uuid = UUID.randomUUID().toString(); //<b class="conum">(2)</b>
+	private final String uuid = UUID.randomUUID().toString(); // <b class="conum">(2)</b>
 
-    public String getUuid() {
-        return uuid;
-    }
+	public String getUuid() {
+		return uuid;
+	}
+
 }
 
 @RestController
 class ContextHttpController {
 
-    private final RequestContext context;
+	private final RequestContext context;
 
-    // <b class="conum">(3)</b>
-    ContextHttpController(RequestContext context) {
-        this.context = context;
-    }
+	// <b class="conum">(3)</b>
+	ContextHttpController(RequestContext context) {
+		this.context = context;
+	}
 
-    @GetMapping("/scopes/context")
-    String uuid() {
-        return this.context.getUuid();
-    }
+	@GetMapping("/scopes/context")
+	String uuid() {
+		return this.context.getUuid();
+	}
+
 }</code></pre>
 </div>
 </div>
@@ -906,48 +917,56 @@ import java.util.Map;
 @Configuration
 class QualifiersConfiguration {
 
-    // <b class="conum">(1)</b>
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; android(@Android MobileMarketplace mobileMarketplace) {
-        return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
-    }
+	// <b class="conum">(1)</b>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; android(@Android MobileMarketplace mobileMarketplace) {
+		return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
+	}
 
-    //<b class="conum">(2)</b>
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; ios(@Apple MobileMarketplace mobileMarketplace) {
-        return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
-    }
+	// <b class="conum">(2)</b>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; ios(@Apple MobileMarketplace mobileMarketplace) {
+		return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
+	}
 
-    //<b class="conum">(3)</b>
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; mobileMarketplaceListener(Map&lt;String, MobileMarketplace&gt; mobileMarketplaces) {
-        return event -&gt; mobileMarketplaces.forEach((key, bean) -&gt; System.out.println(key + '=' + bean.getClass().getName()));
-    }
+	// <b class="conum">(3)</b>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; mobileMarketplaceListener(
+			Map&lt;String, MobileMarketplace&gt; mobileMarketplaces) {
+		return event -&gt; mobileMarketplaces
+				.forEach((key, bean) -&gt; System.out.println(key + '=' + bean.getClass().getName()));
+	}
+
 }
 
-//<b class="conum">(4)</b>
+// <b class="conum">(4)</b>
 @Retention(RetentionPolicy.RUNTIME)
 @Qualifier("ios")
 @interface Apple {
+
 }
 
 @Retention(RetentionPolicy.RUNTIME)
 @Qualifier("android")
 @interface Android {
+
 }
 
 interface MobileMarketplace {
+
 }
 
-//<b class="conum">(5)</b>
+// <b class="conum">(5)</b>
 @Service
 @Qualifier("ios")
 class AppStore implements MobileMarketplace {
+
 }
 
 @Service
 @Qualifier("android")
 class PlayStore implements MobileMarketplace {
+
 }</code></pre>
 </div>
 </div>
@@ -994,11 +1013,12 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(DemoProperties.class)
 class PropertiesConfiguration {
 
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; propertiesApplicationListener( //<b class="conum">(1)</b>
-            DemoProperties properties) {
-        return args -&gt; System.out.println("the name is " + properties.name());
-    }
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; propertiesApplicationListener( // <b class="conum">(1)</b>
+			DemoProperties properties) {
+		return args -&gt; System.out.println("the name is " + properties.name());
+	}
+
 }
 
 // <b class="conum">(2)</b>
@@ -1056,10 +1076,11 @@ import org.springframework.core.NativeDetector;
 @Configuration
 class DetectionConfiguration {
 
-    @Bean
-    ApplicationListener&lt;ApplicationReadyEvent&gt; detectionListener() {
-        return args -&gt; System.out.println("is native image? " + NativeDetector.inNativeImage());
-    }
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; detectionListener() {
+		return args -&gt; System.out.println("is native image? " + NativeDetector.inNativeImage());
+	}
+
 }</code></pre>
 </div>
 </div>
@@ -1089,13 +1110,153 @@ class DetectionConfiguration {
 <div class="sect1">
 <h2 id="_processing_the_bean_factory">Processing the Bean Factory</h2>
 <div class="sectionbody">
+<div class="paragraph">
+<p>We&#8217;ve talked about the <code>BeanFactory</code>. It&#8217;s basically a container, an aggregation, of all the beans in your application. In earlier sections we saw that the beans in the <code>BeanFactory</code> are created as <code>BeanDefinition</code> instances. These `BeanDefinition`s are the metamodel representation of your object graph. They describe all the dependencies, constructors, annotations, fields, etc., related to your bean instances.</p>
+</div>
+<div class="paragraph">
+<p>Spring makes it trivial to act on those collection of <code>BeanDefinition</code> instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The <code>BeanFactoryPostProcessor</code> is a callback interface that lets us have access to the <code>BeanFactory</code> and to manipulate the <code>BeanDefinition</code> instances. We can regiser new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The <code>BeanFactory</code> is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrealla project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot appliations deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analuzing the <code>BeanFactory</code>, identifying infrastructure-related beans like <code>javax.sql.DataSource</code>, and then replacing them with a new bean of an identical interface, but with a connection pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a <code>DataSource</code> talking to an embedded H2 instance on your loccal machine, but when you deploy it, this <code>BeanFactoryPostProcessor</code> identifies connection strings in environment variables in the process space for the application and uses that to create a proper <code>DataSource</code> talking to that managed infrastructure, presumably on another host and port. And this was all transprent to the user, which is what we want.</p>
+</div>
+<div class="paragraph">
+<p>The <code>BeanFactoryPostProcessor</code> is a great place to see <em>everything</em> in the <code>BeanFactory</code> all in one place when the application starts up.</p>
+</div>
+<div class="paragraph">
+<p>the <code>BeanFactoryInitializationAotProcessor</code> is a new itnerface that is sort of a peer t the <code>BeanFactoryPostProcessor</code>. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) whuile analyzing the `BeanDefinition`s in the application.</p>
+</div>
+<div class="paragraph">
+<p>It&#8217;s important that you work only in terms of the <code>BeanDefinition</code> instances and bean names, in botht hese interfaces. Remember, at this point Spring hasn&#8217;t created any of theb eans. So, while you&#8217;ll be able to call <code>BeanFactory#getBean(String)</code>, it&#8217;ll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don&#8217;t do this - it&#8217;ll really screw things up!</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s look a trivial example. We&#8217;ll write a <code>BeanFactoryPostProcessor</code> that analyzes programmatically registers a new <code>BeanDefinition</code> in the application context. Would you ever nee dto do this? No. but it&#8217;s hopefully illustrative. We&#8217;ll use a subclass of <code>BeanFactoryPostProcessor</code> called <code>BeanDefinitionRegistryPostProcessor</code>, which gives us a <code>BeanFactory</code> downcast to a specific subtype that supports programatically registering new beans. The trouble is that this bean we&#8217;ll register is going to require some reflection usign the Jackson JSON API, so well need to also register a GraalVM hint for it using a <code>BeanFactoryInitializationAotProcessor</code> contribution.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.bfpp;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.SneakyThrows;
+import org.springframework.aot.hint.MemberCategory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+import java.util.UUID;
+
+import static com.example.aot.bfpp.BfppConfiguration.BEAN_NAME;
+
+@Configuration
+class BfppConfiguration {
+
+	// <b class="conum">(1)</b>
+	static String BEAN_NAME = "myBfppListener";
+
+	// <b class="conum">(2)</b>
+	@Bean
+	static ListenerBeanFactoryPostProcessor listenerBeanFactoryPostProcessor() {
+		return new ListenerBeanFactoryPostProcessor();
+	}
+
+	@Bean
+	static ListenerBeanFactoryInitializationAotProcessor listenerBeanFactoryInitializationAotProcessor() {
+		return new ListenerBeanFactoryInitializationAotProcessor();
+	}
+
+}
+
+// <b class="conum">(3)</b>
+class Listener implements ApplicationListener&lt;ApplicationReadyEvent&gt; {
+
+	private final ObjectMapper objectMapper;
+
+	Listener(ObjectMapper objectMapper) {
+		this.objectMapper = objectMapper;
+	}
+
+	@Override
+	@SneakyThrows
+	public void onApplicationEvent(ApplicationReadyEvent event) {
+		var products = List.of(new Product(UUID.randomUUID().toString()), new Product(UUID.randomUUID().toString()));
+		for (var p : products)
+			System.out.println(objectMapper.writeValueAsString(p));
+	}
+
+}
+
+record Product(String sku) {
+}
+
+// <b class="conum">(4)</b>
+class ListenerBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
+	@Override
+	public void postProcessBeanFactory(ConfigurableListableBeanFactory bf) throws BeansException {
+	}
+
+	@Override
+	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+
+		if (!registry.containsBeanDefinition(BEAN_NAME))
+			registry.registerBeanDefinition(BEAN_NAME,
+					BeanDefinitionBuilder.rootBeanDefinition("com.example.aot.bfpp.Listener").getBeanDefinition());
+
+	}
+
+}
+
+// <b class="conum">(5)</b>
+class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
+
+	@Override
+	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory bf) {
+
+		if (bf.containsBeanDefinition(BEAN_NAME)) {
+			return (ctx, code) -&gt; {
+				var hints = ctx.getRuntimeHints();
+				hints.reflection().registerType(Product.class, MemberCategory.values());
+			};
+		}
+		return null;
+	}
+
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>were going to work with the same bean both at compile time and at runtime. So, I&#8217;ve stashed a variable with the name of the bean here for access from both interfaces at both phases</p>
+</li>
+<li>
+<p>Note that the bean definitions here are registered with the <code>static</code> keyword. Spring will involve these beans very early in the lifecycle of the application context. It won&#8217;t have any livefire beans except for these very early beans. So, we use <code>static</code> to avoid depending on anything from the <code>BeanFactory</code>. And don&#8217;t force Spring to construct the <code>@Configuration</code> class containing the <code>@Bean</code> registration methods, too.</p>
+</li>
+<li>
+<p>the <code>Listener</code> is a trivla <code>ApplicationListener</code> that, wehn run, will iterate over a collection of dummy DTOs and print them out using Jackson for JSON serialization. This serialization involves reflection, for wihch we&#8217;ll need to furnish hints.</p>
+</li>
+<li>
+<p>the first callback, the <code>ListenerBeanFactoryPostProcessor</code>, programatically registers a new <code>BeanDefinition</code> of type <code>Listener</code> if a bean of the name we&#8217;ve specified in the variable doesn&#8217;t already exist in the context. This object runs at runtime, in both the JRE and the AOT application. Here were changing, molding, the <code>BeanFactory</code>.</p>
+</li>
+<li>
+<p>when we compile the application using the AOT engine, intending to biold a graalvm native image, Spring Boot will aso run the the <code>ListenerBeeanFactoryInitializationAotProcessor</code>, which - knoiwing that we&#8217;ll eventually register a <code>Listener</code> bean - furnishes the requisite hints to make the JSON serialization of the <code>Product</code> records work.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>These two itnerfaces work well together. They complement each other.</p>
+</div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-11-28 09:47:20 -0800
+Last updated 2022-11-29 14:33:09 -0800
 </div>
 </div>
 </body>

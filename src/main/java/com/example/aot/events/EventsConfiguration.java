@@ -11,19 +11,20 @@ import org.springframework.context.event.EventListener;
 @Configuration
 class EventsConfiguration {
 
-    // <1>
-    @Bean
-    ApplicationListener<WebServerInitializedEvent> webServerInitializedEventApplicationListener() {
-        return event -> run("ApplicationListener<WebServerInitializedEvent>", event);
-    }
+	// <1>
+	@Bean
+	ApplicationListener<WebServerInitializedEvent> webServerInitializedEventApplicationListener() {
+		return event -> run("ApplicationListener<WebServerInitializedEvent>", event);
+	}
 
-    // <2>
-    @EventListener
-    public void eventListener(ApplicationReadyEvent event) {
-        run("@EventListener", event);
-    }
+	// <2>
+	@EventListener
+	public void eventListener(ApplicationReadyEvent event) {
+		run("@EventListener", event);
+	}
 
-    private void run(String where, ApplicationEvent are) {
-        System.out.println(where + " : " + are);
-    }
+	private void run(String where, ApplicationEvent are) {
+		System.out.println(where + " : " + are);
+	}
+
 }

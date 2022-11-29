@@ -11,28 +11,31 @@ import java.util.function.Supplier;
 @Configuration
 @ImportResource("app.xml")
 class XmlConfiguration {
+
 }
 
-class MessageProducer implements Supplier <String> {
+class MessageProducer implements Supplier<String> {
 
-    @Override
-    public String get() {
-        return "Hello, world!" ;
-    }
+	@Override
+	public String get() {
+		return "Hello, world!";
+	}
+
 }
 
-class XmlLoggingApplicationListener implements ApplicationListener <ApplicationReadyEvent> {
+class XmlLoggingApplicationListener implements ApplicationListener<ApplicationReadyEvent> {
 
-    @Nullable
-    private MessageProducer producer ;
+	@Nullable
+	private MessageProducer producer;
 
-    public void setProducer(@Nullable MessageProducer producer) {
-        this.producer = producer;
-    }
+	public void setProducer(@Nullable MessageProducer producer) {
+		this.producer = producer;
+	}
 
-    @Override
-    public void onApplicationEvent(ApplicationReadyEvent event) {
-        var message = this.producer.get() ;
-        System.out.println("the message is " + message);
-    }
+	@Override
+	public void onApplicationEvent(ApplicationReadyEvent event) {
+		var message = this.producer.get();
+		System.out.println("the message is " + message);
+	}
+
 }

@@ -23,68 +23,75 @@ import static com.example.aot.bfpp.BfppConfiguration.BEAN_NAME;
 @Configuration
 class BfppConfiguration {
 
-    static String BEAN_NAME = "myBfppListener";
+	// <1>
+	static String BEAN_NAME = "myBfppListener";
 
-    @Bean
-    static ListenerBeanFactoryPostProcessor listenerBeanFactoryPostProcessor (){
-        return new ListenerBeanFactoryPostProcessor();
-    }
+	// <2>
+	@Bean
+	static ListenerBeanFactoryPostProcessor listenerBeanFactoryPostProcessor() {
+		return new ListenerBeanFactoryPostProcessor();
+	}
 
-    @Bean
-    ListenerBeanFactoryInitializationAotProcessor listenerBeanFactoryInitializationAotProcessor (){
-        return new ListenerBeanFactoryInitializationAotProcessor ();
-    }
+	@Bean
+	static ListenerBeanFactoryInitializationAotProcessor listenerBeanFactoryInitializationAotProcessor() {
+		return new ListenerBeanFactoryInitializationAotProcessor();
+	}
+
 }
 
-class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
-
-    @Override
-    public BeanFactoryInitializationAotContribution processAheadOfTime(
-            ConfigurableListableBeanFactory bf) {
-
-        if (bf.containsBeanDefinition(BEAN_NAME)) {
-            return (ctx, code) -> {
-                var hints = ctx.getRuntimeHints();
-                hints.reflection().registerType(Product.class, MemberCategory.values());
-            } ;
-        }
-        return null;
-    }
-}
-
-class ListenerBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
-
-    @Override
-    public void postProcessBeanFactory(ConfigurableListableBeanFactory bf) throws BeansException {
-    }
-
-    @Override
-    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
-
-        if (!registry.containsBeanDefinition(BEAN_NAME))
-            registry.registerBeanDefinition(BEAN_NAME,
-                    BeanDefinitionBuilder.rootBeanDefinition("com.example.aot.bfpp.Listener").getBeanDefinition());
-
-    }
-}
-
+// <3>
 class Listener implements ApplicationListener<ApplicationReadyEvent> {
 
-    private final ObjectMapper objectMapper;
+	private final ObjectMapper objectMapper;
 
-    Listener(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+	Listener(ObjectMapper objectMapper) {
+		this.objectMapper = objectMapper;
+	}
 
-    @Override
-    @SneakyThrows
-    public void onApplicationEvent(ApplicationReadyEvent event) {
-        var products = List.of(new Product(UUID.randomUUID().toString()),
-                new Product(UUID.randomUUID().toString()));
-        for (var p : products)
-            System.out.println(objectMapper.writeValueAsString(p));
-    }
+	@Override
+	@SneakyThrows
+	public void onApplicationEvent(ApplicationReadyEvent event) {
+		var products = List.of(new Product(UUID.randomUUID().toString()), new Product(UUID.randomUUID().toString()));
+		for (var p : products)
+			System.out.println(objectMapper.writeValueAsString(p));
+	}
+
 }
 
 record Product(String sku) {
+}
+
+// <4>
+class ListenerBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
+	@Override
+	public void postProcessBeanFactory(ConfigurableListableBeanFactory bf) throws BeansException {
+	}
+
+	@Override
+	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+
+		if (!registry.containsBeanDefinition(BEAN_NAME))
+			registry.registerBeanDefinition(BEAN_NAME,
+					BeanDefinitionBuilder.rootBeanDefinition("com.example.aot.bfpp.Listener").getBeanDefinition());
+
+	}
+
+}
+
+// <5>
+class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
+
+	@Override
+	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory bf) {
+
+		if (bf.containsBeanDefinition(BEAN_NAME)) {
+			return (ctx, code) -> {
+				var hints = ctx.getRuntimeHints();
+				hints.reflection().registerType(Product.class, MemberCategory.values());
+			};
+		}
+		return null;
+	}
+
 }

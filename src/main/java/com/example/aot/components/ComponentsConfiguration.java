@@ -13,19 +13,20 @@ import java.util.Map;
 @Configuration
 class ComponentsConfiguration {
 
-    @EventListener(ApplicationReadyEvent.class)
-    public void hello() {
-        System.out.println("hello, world!");
-    }
+	@EventListener(ApplicationReadyEvent.class)
+	public void hello() {
+		System.out.println("hello, world!");
+	}
+
 }
 
 @Controller
 @ResponseBody
 class GreetingsController {
 
-    @GetMapping("/hello/{name}")
-    Map<String, String> hello(@PathVariable String name) {
-        return Map.of("message", "Hello, " + name + "!");
-    }
+	@GetMapping("/hello/{name}")
+	Map<String, String> hello(@PathVariable String name) {
+		return Map.of("message", "Hello, " + name + "!");
+	}
 
 }

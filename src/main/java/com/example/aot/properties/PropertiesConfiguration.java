@@ -11,11 +11,12 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(DemoProperties.class)
 class PropertiesConfiguration {
 
-    @Bean
-    ApplicationListener<ApplicationReadyEvent> propertiesApplicationListener( //<1>
-            DemoProperties properties) {
-        return args -> System.out.println("the name is " + properties.name());
-    }
+	@Bean
+	ApplicationListener<ApplicationReadyEvent> propertiesApplicationListener( // <1>
+			DemoProperties properties) {
+		return args -> System.out.println("the name is " + properties.name());
+	}
+
 }
 
 // <2>

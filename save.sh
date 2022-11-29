@@ -1,3 +1,2 @@
 #!/usr/bin/env bash
-./blog.sh
-git commit -am polish && git push
+mvn spring-javaformat:apply && ./blog.sh  && git commit -am polish && git push

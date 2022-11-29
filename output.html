@@ -1108,6 +1108,110 @@ class DetectionConfiguration {
 </div>
 </div>
 <div class="sect1">
+<h2 id="_application_migration">Application Migration</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>[on camera]</p>
+</li>
+<li>
+<p>everything works so far, and that&#8217;s certainly our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes things don&#8217;t work as expected.</p>
+</li>
+<li>
+<p>Sometimes they don&#8217;t work because one of the libraries on the class path or indeed your code itself has done something to run afoul of the aforementioned cases where you&#8217;ll need to furnish configuration <code>.json</code> files</p>
+</li>
+<li>
+<p>[ time :: video to express the passage of time]</p>
+</li>
+<li>
+<p>The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30s or longer compiler times and long reset cycles are involved!</p>
+</li>
+<li>
+<p>[on camera]</p>
+</li>
+<li>
+<p>once you know what configuration your application will need, it&#8217;s pretty straightforward to then craft the hints using the Java API. There&#8217;s a pretty good way to get a lot of this work done for you: run the <strong>java agent</strong>.</p>
+</li>
+<li>
+<p>You can run the program and get it to tell you what things were reflected on by running the app on the jvm with <code>-Dagent=true</code> when running the app with maven (try <code>spring-boot:run</code>). This will dump out config files in the <code>target/native/agent-output</code> directory</p>
+</li>
+<li>
+<p><strong>Demo</strong> [<code>migration</code> or <code>reflection</code>]</p>
+</li>
+<li>
+<p>create a <code>data.csv</code> with the following contents:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>1,Madhura
+2,Yuxin
+3,Phil
+4,Violetta
+5,Stéphane
+6,Jürgen
+7,Dr. Syer
+8,Josh
+9,Marcin
+10,Candice</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>write a program that loads some CSV data from the classpath, then uses it to create some <code>Customer</code> data and turn it into JSON to be logged on the  console using <code>ObjectMapper</code> for easy debugging.</p>
+</li>
+<li>
+<p>this will require support for both <code>reflection-config.json</code> and <code>resources-config.json</code>.</p>
+</li>
+<li>
+<p>contribute the java agent to the build:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>&lt;configuration&gt;
+  &lt;jvmArguments&gt;
+   -agentlib:native-image-agent=config-output-dir=target/native-image
+&lt;/jvmArguments&gt;</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>then run it thusly</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>rm -rf target
+
+./mvnw -DskipTests clean package spring-boot:run</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>have it tell us what kind of hints we&#8217;ll need. Then well craft our first set of hints using the <code>RuntimeHintsRegistrar `and `RegisterforBinding</code></p>
+</li>
+<li>
+<p>the <code>RuntimeHintsRegistrar</code> is a convenient callback that you can easily declare in any <code>@Configuration</code> class with the <code>@ImportRuntimeHints(Class&lt;?&gt;)</code> annotation or via the <code>aot.factories</code> file.</p>
+</li>
+<li>
+<p>for a lot of developers, these two tools - the Java agent and hints - may be enough to get the job done. This is hopefully as much as most application developers will need to know.</p>
+</li>
+<li>
+<p>things get more interesting when you start to imagine infrastructure level concerns, and when you start looking at  purpose-built frameworks built on top of Spring Boot. Let&#8217;s put on our infrastructure hats here and look at some of the meta model programming that Spring has supported since day 1, and how this new AOT compilation phase interacts with all that.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_processing_the_bean_factory">Processing the Bean Factory</h2>
 <div class="sectionbody">
 <div class="paragraph">
@@ -1249,14 +1353,217 @@ class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitia
 </ol>
 </div>
 <div class="paragraph">
-<p>These two itnerfaces work well together. They complement each other.</p>
+<p>These two itnerfaces work well together. They complement each other. The <code>BeanFactory</code> is the lowest level at which I&#8217;d write code. I don&#8217;t want to write code in terms of the <code>BeanFactory</code> if i can avoid it. It is, as I said, the promoridal ooze of your running application. Its the suggestion, the insinuation, the allusion to a valid working application. But it&#8217;s not a working application. That comes only after those <code>BeanDefinition</code> instances are turned into valid objects. that comes next.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_processing_beans">Processing Beans</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>If the <code>BeanFactory</code> is to meta for you, then you can still do interesting things at the next rung in the abstaction ladder, working with beans directly, both before they&#8217;ve been initialized and after.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>[ beans-evolution :: animation of a bean moving from primordial soup to live-beans. 4 columns. In the first column, <code>BeanFactoryInitializationAotProcessor</code>. In the second column, <code>BeanRegistrationAotProcessor</code> In the third column is a bubbling cauldron of lava (with <code>BeanDefinition`s and `BeanFactoryPostProcessors</code> floating about). In the fourth column is regular beans. Show the beans going from the 1st to 4th column in this animation ]</p>
+</li>
+<li>
+<p>working on a bean by bean basis can be very powerful. If you want to work with actual, live-fire beans, you can use Spring&#8217;s <code>BeanPostProcessor</code>. This interface puts you in a position to act-on, to transform, objects before they&#8217;re finally live and handling logic.</p>
+</li>
+<li>
+<p>this is great for infrastructure code, such as frameworks, where you need to note or retain or observe references to objects of a given shape. What shape? Well, anything, really! Objects that have a certain marker interface. Objects that have a certain annotation. Whatever you want, and whatever you could decide given reflection methods.</p>
+</li>
+<li>
+<p>lets look at an example that creates proxies for objects with an annotation, <code>@Logged</code>, logging out any method invocations on those beans.</p>
+</li>
+<li>
+<p>I implement this proxy with Spring&#8217;s <code>ProxyFactory</code>, which makes it trivial to use the <em>proxy</em> design pattern.</p>
+</li>
+<li>
+<p>A proxy, in its most general form, is a class functioning as an interface to something else</p>
+</li>
+<li>
+<p>Spring uses proxies to handle things like declarative transaction management, auditing, security, logging, concurrency, etc. there a great way to <em>decorate</em> an existing object with cross-cutting concerns, like starting and committing a transaction before and after a method invocation. Spring uses them all over the place, for things like <code>@Transactional</code>, <code>@Scheduled</code>, <code>@Async</code>, <code>@Authorized</code>, and countless more.</p>
+</li>
+<li>
+<p>There are two types of proxies: cglib and JDK proxies.</p>
+</li>
+<li>
+<p>JDK proxies are built using the <code>InvocationHandler</code> API. They make it trivial to create an object that implements an interface type of your choice and then forwards the actual work to a concrete instance of your choice. In this case, the word <code>interface</code>  used in the description above is quite literally a Java <code>interface</code> type.</p>
+</li>
+<li>
+<p>but what if the contract the surface area, the <em>interface</em> of your class isn&#8217;t a Java interface? What if it&#8217;s a concrete class for which it makes little sense to extract out a separate Java interface? JDK proxies require an interface, and they were the only thing supported in Spring until Spring Framework 1.1.</p>
+</li>
+<li>
+<p>I can&#8217;t be sure, but I suspect this is one of the reasons so much of the early literature suggests using interfaces with Spring beans, and why you&#8217;d see things like <code>FooService</code> and <code>DefaultFooService</code> or <code>FooService</code> and <code>FooServiceImpl</code> or whatever. Nowadays that&#8217;s an anti-pattern, and highly discouraged, <em>unless</em> you actually plan to have more than one implementation of <code>FooService</code>. That is, suppose you&#8217;re implementing a <code>AppStore</code> interface, and you might have one version of the interface for iOS and another for Android. Avoid the knee-jerk reaction to create an interface for an object that has the same shape as the object. It only complicates things.</p>
+</li>
+<li>
+<p>Spring supports concrete proxies, too, using CGLIB. CGLIB is used to dynamically generate the code to subclass an existing type. The constraint, thus, is that the type be subclass-able. So, beware things like <code>final</code> and <code>sealed</code>.</p>
+</li>
+<li>
+<p>Spring&#8217;s concrete proxies are unique to Spring. You&#8217;re using them every time you use a <code>@Configuration</code> class! They&#8217;re <strong>everywhere.</strong></p>
+</li>
+<li>
+<p>Naturally, creating a dynamic subclass of a given type, registering it in the <code>ClassLoader</code> and then swapping out your instance for the instance that delegates to yours implies a lot of funny business that we&#8217;ll need to account for everything at compile time in an AOT context.</p>
+</li>
+<li>
+<p>Mercifully, Spring can do a lot of this for us. Let&#8217;s take a look at an example.</p>
+</li>
+<li>
+<p><strong>Demo</strong> [<code>beanpostprocessors.proxies</code>]</p>
+</li>
+<li>
+<p>look at the code <code>LoggedBeanPostProcessor</code></p>
+</li>
+<li>
+<p>Note that we&#8217;re using a <code>SmartInstantiationAwareBeanPostProcessor</code>, which is a subclass of <code>BeanPostProcessor</code> with an extra method <code>determineBeanType</code> that gives Spring some insight about the proxy-nature of the returned bean.</p>
+</li>
+<li>
+<p>In this example, we&#8217;re using the cohesive design of Springs AOT support to transparently create proxies that just work. If we&#8217;ve done our job right and you&#8217;ve written your code to leverage the right interfaces, then you can trust Spring to do the right thing for CGLIB proxies.</p>
+</li>
+<li>
+<p>Sometimes, however, you need to intervene and explicitly furnish hints for the things you do at runtime. If you&#8217;re using JDK proxies, then you can explicitly register hints for that with <code>ProxyHints</code>  registrar.</p>
+</li>
+<li>
+<p>You might also have stuff you want to do at runtime that requires upfront, compile-time processing. Code-generation is one of the most powerful dimensions of Spring&#8217;s AOT engine. We use it all over the place in Spring Framework 6!</p>
+</li>
+<li>
+<p>Let&#8217;s look at a simple example. This time we&#8217;ll revisit the code generation to register a Spring Boot Actuator endpoint of type <code>CompilationEndpoint</code>, which we&#8217;re just making up for this example. It&#8217;ll contain information captured <em>at compile-time</em>, like the time and directory in which the code was compiled.</p>
+</li>
+<li>
+<p><strong>Demo</strong> (<code>beanpostprocessors.codegen</code>)</p>
+</li>
+<li>
+<p>Code generation using Java poet to new-up a new bean</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_testing">Testing</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>[on camera]</p>
+</li>
+<li>
+<p>testing is an incredibly important part of the story. The good news is, we&#8217;ve done a ton of work to make testing <strong>just work</strong> in a native image context. you can run a maven build or a Gradle build in native mode and you&#8217;ll get two output artifacts: one for tests, one for the production code. Fair warning tho! This&#8217;ll make the compilation take twice as long! That could be a few minutes.</p>
+</li>
+<li>
+<p>lets look at some examples of tests:</p>
+</li>
+<li>
+<p><strong>Demo</strong></p>
+</li>
+<li>
+<p>Spring Boot tests</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.aot.basics;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest(properties = "spring.main.web-application-type=none")
+class CustomerRepositoryTest {
+
+    private final CustomerRepository repository;
+
+    CustomerRepositoryTest(@Autowired CustomerRepository repository) {
+        this.repository = repository;
+    }
+
+    @Test
+    void save() throws Exception {
+        var saved = this.repository.save(new Customer(null, "Jürgen")) ;
+        Assertions.assertNotNull(saved.id() );
+    }
+}</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>run with the <code>nativeTest</code> Maven profile, e.g.:  `mvn  -PnativeTest,native clean package  &amp;&amp; ./target/aot      `</p>
+</li>
+<li>
+<p>there&#8217;s a new binary in the <code>target</code> directory called <code>native-tests</code></p>
+</li>
+<li>
+<p>show how you can write tests things like the predicates themselves with <code>RuntimeHintsPredicates</code>:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">class MigrationsConfigurationTest {
+
+    @Test
+    void hints() {
+        var runtimeHints = new RuntimeHints();
+        var registrar = new MigrationsConfiguration.MigrationsRuntimeHintsRegistrar();
+        var classLoader = getClass().getClassLoader();
+        registrar.registerHints(runtimeHints, classLoader);
+        assertThat(RuntimeHintsPredicates.resource().forResource("data.csv")).accepts(runtimeHints);
+    }
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_a_note_on_compile_times">a note on compile times</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You know. I love GraalVM, but one thing that can be a real kick in the pants are the wait-times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. it&#8217;s no wonder that it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. And it&#8217;s almost a curse that they&#8217;ve improved as much as they have, because the compile times are now fast enough hat you don&#8217;t have time to go pour a cup of coffeee or eat a cup of yogurt, but slow enough that you feel like you&#8217;re being interrupted. Youre being kicked out of 'the zone'. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java and Go and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backwards. I kick off a compile and my mind wanders. i&#8217;ve been doing so many of these that now I&#8217;m starting to hear elevator music when I do a compile! Don&#8217;t you hear elevator music? So I filed an issue. I want everyone else to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official graalvm project and I asked. it seemed to resonate with people. one person even suggested which elevator music we should use. I love it! And, fabian nipehaus - of the official graalvm team at oracle, a PhD - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with a promising prototype. I love this prototype. He even had it print out some ascii art so that peoplewould have something to look at. i was sad, to say the least, to see that he didn&#8217;t think this would be accepted, if for no other reason than because of the copyrighted music. Dang! oh well. Hope <em>springs</em> eternal.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_conclusion">conclusion</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>[on camera]</p>
+</li>
+<li>
+<p>We&#8217;ve come a long way! When I started covering Spring Native in 2020, a build took 10 minutes and only worked for the smallest of specific scenarios. Now, here we are in 2022 and I can all but effortlessly get a Spring app working in a GraalVM native image context in less than a minute.</p>
+</li>
+<li>
+<p>the performance and memory usage implications are hard to ignore, and I think the inertia required to make the move to AOT will be become easier and easier to obtain in the next days, weeks, months and years, as the community embraces Spring&#8217;s newfound AOT support.</p>
+</li>
+<li>
+<p>I hope this video makes it easier for everyone, application and framework developers alike, to leverage spring boot 3 and spring framework 6.</p>
+</li>
+<li>
+<p>obviously, you won&#8217;t be starved for examples if you need guidance in implementing this stuff in your own code.</p>
+</li>
+<li>
+<p>Just look for pointers to types like <code>RuntimeHintsRegistrar</code>, <code>BeanRegistrationAotProcessor</code>, and <code>BeanFactoryInitializationAotProcessor</code> in the Spring Boot codebase! And those don&#8217;t even begin to cover the implementations provided by the projects themselves, like Spring Security, Spring Data, Spring Cloud, Spring Shell, Spring Integration, and Spring Batch.</p>
+</li>
+<li>
+<p>We&#8217;e only just begun to scratch the surface here, my friends.</p>
+</li>
+<li>
+<p>Now, bear in mind that things may change in relatively minor ways in the coming weeks and months leading to spring boot 3 later this year, but conceptually, what you&#8217;ve seen here today is the future, and it&#8217;s here today.</p>
+</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-11-29 14:33:09 -0800
+Last updated 2022-11-29 14:45:09 -0800
 </div>
 </div>
 </body>

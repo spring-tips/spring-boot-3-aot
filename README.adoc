@@ -46,7 +46,7 @@ To start, as always, we'll go to the https://start.spring.io[Spring Initialzr (s
 
 [source,shell]
 ----
-SDK install java 22.3.r17-grl
+sdk install java 22.3.r17-grl
 ----
 
 I've also added a few dependencies. We won't really touch on these dependencies in any great length, but they'll help us to demonstrate a few concepts, so I've added them.

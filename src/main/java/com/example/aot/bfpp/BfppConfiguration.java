@@ -70,11 +70,9 @@ class ListenerBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProc
 
 	@Override
 	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
-
 		if (!registry.containsBeanDefinition(BEAN_NAME))
 			registry.registerBeanDefinition(BEAN_NAME,
 					BeanDefinitionBuilder.rootBeanDefinition("com.example.aot.bfpp.Listener").getBeanDefinition());
-
 	}
 
 }

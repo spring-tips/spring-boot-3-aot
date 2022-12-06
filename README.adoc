@@ -6,7 +6,15 @@
 
 = Everything You Never Wanted to Know About Spring Boot 3 AOT
 
-Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know the broad strokes of Spring Framework 6 includes, check https://www.youtube.com/watch?v=aUm5WZjh8RA[out this Spring Tips video] for a quick rundown. In this installment, however, I want to look at the details of the brand-new ahead-of-time (AOT) compilation engine in Spring Boot 3.
+Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know the broad strokes of Spring Framework 6 includes, check https://www.youtube.com/watch?v=aUm5WZjh8RA[out this Spring Tips video] for a quick rundown. In this text, however, I want to look at the details of the brand-new ahead-of-time (AOT) compilation engine in Spring Boot 3.
+
+Spring Boot 3's AOT engine introduces a new component model designed to provide extra information about a Spring application that can used to optimize the application both on the JRE and in a GraalVM native image context. For the 80% case, you shouldn't need to worry about a thing. Sometimes, you may need to intervene to get the best results. This text aims to introduce the engine, its happy-path usage, and the corner-case usage.
+
+Why would you need to intervene? What could go wrong? GraalVM native image compilation, that's what. GraalVM's native image compilation produces binaries that are lightning quick and super memory efficient. The caveat is that in order to achieve this magic trick, GraalVM's native image compiler needs to know when you do certain things, like reflection, proxies, JNI, serialization, etc. Somebody has to provide that configuration.
+
+The GraalVM native image compiler needs this configuration specified either as command line switches or as `.json` configuration files present  on the classpath - `META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json`. Ideally, each individual library will ship its own configuration. Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. But what about your code, written with Spring Framework? Spring (and Java, writ large) do a lot of dynamic things with user-provided types that should to be accounted for with configuration, or the GraalVM compilation will fail.
+
+In this release, we've introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation with no hassle. That's the dream, anyway, and we're largely there already. For a good many applications, it's already a reality. In this text, we'll look at the new AOT engine, GraalVM, and the increasingly rarer corner cases that'll require a bit of intervention.
 
 == Introduction
 
@@ -250,9 +258,10 @@ Spring only includes the beans in the final build that are present in the `BeanF
 
 `@Conditional` annotations are evaluated at compile time. The invariant conditions at compilation time and runtime - like `@ConditionalOnClass` and `@ConditionalOnProperty` - work just fine in the native world: the classes present at compile time are, by definition, the classes present at runtime. However, some conditions depend on ambient state, like whether you're running in a Kubernetes cluster (`@ConditionalOnCloudPlatform(platform=CloudPlatform.Kubernetes)`). Avoid these conditions, unless you plan on compiling your code in a Kubernetes cluster.
 
-
 == Application Migration
-- [on camera]
+
+So far, everything works well out of the box.
+
 - everything works so far, and that's certainly our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes things don't work as expected.
 - Sometimes they don't work because one of the libraries on the classpath or indeed your code itself has done something to run afoul of the aforementioned cases where you'll need to furnish configuration `.json` files
 - [ Time :: video to express the passage of time]

@@ -14,7 +14,7 @@ Why would you need to intervene? What could go wrong? GraalVM native image compi
 
 The GraalVM native image compiler needs this configuration specified either as command line switches or as `.json` configuration files present on the classpath - `META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json`. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.
 
-In this release, we've introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation. That's the dream, anyway, and we're essentially there already. In this text, we'll look at the new AOT engine, GraalVM, and the increasingly rarer corner cases requiring some intervention.
+In this release, we've introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation. That's the dream, anyway, and we're essentially there already. This text will look at the new AOT engine, GraalVM, and the increasingly rarer corner cases requiring some intervention.
 
 == Introduction
 
@@ -30,7 +30,8 @@ At this point, Spring turns all the various inputs into a metamodel representati
 Notably, at this phase, there are no live-fire beans. Nothing is opening ports and sockets, doing disk IO, etc. This phase in the `BeanFactory` does not involve any business logic.
 
 === Bean Creation
-At this point, Spring will take all the `BeanDefinition`   instances and create actual, live-fire beans from them. Spring will call constructors, invoke lifecycle methods, etc. After this phase, you'll have an application ready to serve production traffic. This is _good_ (TM). We like production, don't we?
+
+Spring will take all the `BeanDefinition` instances and create actual, live-fire beans. Spring will call constructors, invoke lifecycle methods, etc. After this phase, you'll have an application ready to serve production traffic. This is _good_ (TM). We like production, don't we?
 
 Spring Boot 3 introduces a new phase, at compile time, to support AOT.
 
@@ -88,16 +89,16 @@ Run the main class in your IDE or on the command line in the usual ways:
 mvn -DskipTests spring-boot:run
 ----
 
-You should see some output on the console. It works. hurray. Moving on, let's turn it into a native image, thusly:
+You should see some output on the console. It works. Hurray. Moving on, let's turn it into a native image, thusly:
 
 [source,shell]
 ----
 mvn -Pnative -DskipTests native:compile
 ----
 
-That'll take a minute to finish, so now's a good time to pour a cup of coffee or tea. Maybe do a crossword puzzle. Reflect on the poor life choices you've made to get to this point where your JVM applications take around a minute to compile. It's a bit dispiriting. But always remember: good things come to those who wait!
+That'll take a minute to finish, so now's a good time to pour a cup of coffee or tea. Maybe do a crossword puzzle. Reflect on your poor life choices to get to this point where your JVM applications take around a minute to compile. It's a bit dispiriting. But always remember: good things come to those who wait!
 
-You'll find the compiled binary in the `target` directory, named `aot`. Run it, and you'll see it starts up in no time at all. Like a lightbulb! And, the best part is that it takes very little memory. Of course, there are different ways to measure memory, but looking at the https://en.wikipedia.org/wiki/Resident_set_size[_resident set size_] is informative. Here's a script I use to measure this stuff called `rss.sh`:
+You'll find the compiled binary in the `target` directory, named `aot`. Run it, and you'll see it starts up in no time at all. Like a lightbulb! And, the best part is that it takes very little memory. Of course, there are different ways to measure memory, but looking at https://en.wikipedia.org/wiki/Resident_set_size[_resident set size_] is informative. Here's a script I use to measure this stuff called `rss.sh`:
 
 
 [source,shell]
@@ -109,7 +110,7 @@ RSS=`bc <<< "scale=1; ${RSS}/1024"`
 echo "${PID}: ${RSS}M"
 -----
 
-It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out. You can find the process identifier (PID) for the Spring Boot application in the console towards the top of the application's output.
+It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out. So, for example, you can find the process identifier (PID) for the Spring Boot application in the console towards the top of the application's output.
 
 image::images/pid.png[]
 
@@ -191,9 +192,9 @@ This mechanism is pluggable, too, so implementors may also provide their scopes.
 ----
 include::{source}/com/example/aot/scopes/ScopesConfiguration.java[]
 ----
-<1> this bean is a `request` scoped, so it'll be created anew for each new incoming HTTP request.
+<1> this bean is a `request` scoped, so it'll be created anew for each incoming HTTP request.
 <2> this request-scoped bean should be different across different HTTP requests but the same for successive accesses during the same HTTP request.
-<3> Spring is giving us a proxy, which won't have a real instance until the bean starts its lifecycle, bound to whatever externalities govern them.
+<3> Spring is giving us a proxy, which won't result in an actual instance until the bean starts its lifecycle, bound to whatever externalities govern them.
 
 Compile the application and visit  `http://localhost:8080/scopes/context` in your browser a few times. You should see that the `UUID` differs in each HTTP request.
 
@@ -213,7 +214,7 @@ include::{source}/com/example/aot/qualifiers/QualifiersConfiguration.java[]
 -----
 <1> this bean uses the `android` implementation
 <2> this bean uses the `apple` implementation
-<3> can't decide? Just inject a `Map<String,T>`, where `T` is the type you're looking for. Spring will provide a map of bean names to bean types.
+<3> can't decide? Just inject a `Map<String,T>`, where `T` is the type you're looking for. Spring will provide a map of bean names to bean instances.
 <4> we create a meta-annotation.
 <5> we implement the interface
 
@@ -259,18 +260,18 @@ These interfaces also generate _new_, optimized code to recreate the state of th
 
 Spring only includes the beans in the final build present in the `BeanFactory` at compile time. So, if you have a bean that wasn't created at compile time because some `@Conditional` test evaluated to `false`, or because some profile wasn't active, it won't be there in the native image. To that end, I'd strongly urge you to avoid using profiles if you intend to create a GraalVM native image. There are some `@Conditional` annotations you should avoid, too.
 
-Spring's AOT engine evaluates the `@Conditional` annotations at compile time. Some invariant conditions are the same at compilation time and runtime - like `@ConditionalOnClass` and `@ConditionalOnProperty`. They work just fine in the native world: the classes present at compile time are, by definition, the classes present at runtime. However, some conditions depend on ambient state, like whether you're running in a Kubernetes cluster (`@ConditionalOnCloudPlatform(platform=CloudPlatform.Kubernetes)`). Avoid these conditions, unless you plan on compiling your code in a Kubernetes cluster.
+Spring's AOT engine evaluates the `@Conditional` annotations at compile time. Some invariant conditions are the same at compilation time and runtime - like `@ConditionalOnClass` and `@ConditionalOnProperty`. They work just fine in the native world: the classes present at compile time are, by definition, the classes present at runtime. However, some conditions depend on ambient state, like whether you're running in a Kubernetes cluster (`@ConditionalOnCloudPlatform(platform=CloudPlatform.Kubernetes)`). Avoid these conditions unless you plan on compiling your code in a Kubernetes cluster.
 
 == Application Migration
 
 So far, everything works well out of the box.
 
-- everything works so far, and that's our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes things don't work as expected.
-- Sometimes, they don't work because one of the libraries on the classpath or indeed your code itself has done something to run afoul of the aforementioned cases where you'll need to furnish configuration `.json` files
+- everything works so far, and that's our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes, things don't work as expected.
+- Sometimes, they don't work because one of the libraries on the classpath or indeed your code itself has done something to run afoul of the cases as mentioned earlier where you'll need to furnish configuration `.json` files
 - [ Time :: video to express the passage of time]
 - The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30s or longer compiler times and long reset cycles are involved!
 - [on camera]
-- once you know what configuration your application will need, it's pretty straightforward to then craft the hints using the Java API. There's a pretty good way to get a lot of this work done for you: run the *java agent*.
+- once you know what configuration your application will need, it's pretty straightforward to craft the hints using the Java API. There's a pretty good way to get a lot of this work done for you: run the *java agent*.
 - You can run the program and get it to tell you what things were reflected on by running the app on the jvm with `-Dagent=true` when running the app with maven (try `spring-boot:run). This will dump out config files in the `target/native/agent-output` directory
 - **Demo** [`migration` or `reflection`]
 - create a `data.csv` with the following contents:

@@ -1181,19 +1181,13 @@ class DetectionConfiguration {
 <h2 id="_application_migration">Application Migration</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, soemtimes things don&#8217;t work as expected. Sometimes, they don&#8217;t work because one o fthe libraries on the classpath or indeed your code has done something to run afould of the cases as mentioned earlier where you&#8217;ll need to furnish configuration <code>.json</code> files.</p>
+<p>So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, soemtimes things don&#8217;t work as expected. Sometimes, they don&#8217;t work because one of the libraries on the classpath or indeed your code has done something to run afould of the cases as mentioned earlier where you&#8217;ll need to furnish configuration <code>.json</code> files.</p>
+</div>
+<div class="paragraph">
+<p>The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30 seconds or longer compile times and long reset cycles are involved!</p>
 </div>
 <div class="ulist">
 <ul>
-<li>
-<p>[ Time :: video to express the passage of time]</p>
-</li>
-<li>
-<p>The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30s or longer compiler times and long reset cycles are involved!</p>
-</li>
-<li>
-<p>[on camera]</p>
-</li>
 <li>
 <p>once you know what configuration your application will need, it&#8217;s pretty straightforward to craft the hints using the Java API. There&#8217;s a pretty good way to get a lot of this work done for you: run the <strong>java agent</strong>.</p>
 </li>
@@ -1570,7 +1564,7 @@ class CustomerRepositoryTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-07 17:09:08 -0800
+Last updated 2022-12-07 17:17:31 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

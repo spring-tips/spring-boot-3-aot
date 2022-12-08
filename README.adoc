@@ -266,11 +266,10 @@ Spring's AOT engine evaluates the `@Conditional` annotations at compile time. So
 
 == Application Migration
 
-So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, soemtimes things don't work as expected. Sometimes, they don't work because one o fthe libraries on the classpath or indeed your code has done something to run afould of the cases as mentioned earlier where you'll need to furnish configuration `.json` files.
+So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, soemtimes things don't work as expected. Sometimes, they don't work because one of the libraries on the classpath or indeed your code has done something to run afould of the cases as mentioned earlier where you'll need to furnish configuration `.json` files.
 
-- [ Time :: video to express the passage of time]
-- The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30s or longer compiler times and long reset cycles are involved!
-- [on camera]
+The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30 seconds or longer compile times and long reset cycles are involved!
+
 - once you know what configuration your application will need, it's pretty straightforward to craft the hints using the Java API. There's a pretty good way to get a lot of this work done for you: run the *java agent*.
 - You can run the program and get it to tell you what things were reflected on by running the app on the jvm with `-Dagent=true` when running the app with maven (try `spring-boot:run). This will dump out config files in the `target/native/agent-output` directory
 - **Demo** [`migration` or `reflection`]

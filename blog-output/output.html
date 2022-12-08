@@ -1068,6 +1068,11 @@ class PlayStore implements MobileMarketplace {
 </div>
 <div class="sect2">
 <h3 id="_configuration_properties">Configuration Properties</h3>
+<div class="imageblock">
+<div class="content">
+<img src="images/environment.gif" alt="environment">
+</div>
+</div>
 <div class="paragraph">
 <p>Spring Framework provides the <code>Environment</code> abstraction, mapping between a <code>String</code> key and a <code>String</code> value. In addition, there is a strategy interface (<code>PropertyResolver</code>) for resolving these properties. Spring Boot can then take values in the <code>Environment</code> and map them to objects via setters or their constructors. Here&#8217;s an example:</p>
 </div>
@@ -1176,16 +1181,10 @@ class DetectionConfiguration {
 <h2 id="_application_migration">Application Migration</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>So far, everything works well out of the box.</p>
+<p>So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, soemtimes things don&#8217;t work as expected. Sometimes, they don&#8217;t work because one o fthe libraries on the classpath or indeed your code has done something to run afould of the cases as mentioned earlier where you&#8217;ll need to furnish configuration <code>.json</code> files.</p>
 </div>
 <div class="ulist">
 <ul>
-<li>
-<p>everything works so far, and that&#8217;s our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes, things don&#8217;t work as expected.</p>
-</li>
-<li>
-<p>Sometimes, they don&#8217;t work because one of the libraries on the classpath or indeed your code itself has done something to run afoul of the cases as mentioned earlier where you&#8217;ll need to furnish configuration <code>.json</code> files</p>
-</li>
 <li>
 <p>[ Time :: video to express the passage of time]</p>
 </li>
@@ -1571,7 +1570,7 @@ class CustomerRepositoryTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-07 16:59:41 -0800
+Last updated 2022-12-07 17:09:08 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

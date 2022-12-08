@@ -8,13 +8,13 @@
 
 Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know the broad strokes of Spring Framework 6 includes, check https://www.youtube.com/watch?v=aUm5WZjh8RA[out this Spring Tips video] for a quick rundown. In this text, however, I want to look at the details of the brand-new ahead-of-time (AOT) compilation engine in Spring Boot 3.
 
-Spring Boot 3's AOT engine introduces a new component model designed to provide extra information about a Spring application that can used to optimize the application both on the JRE and in a GraalVM native image context. For the 80% case, you shouldn't need to worry about a thing. Sometimes, you may need to intervene to get the best results. This text aims to introduce the engine, its happy-path usage, and the corner-case usage.
+Spring Boot 3's AOT engine introduces a new component model designed to provide extra information about a Spring application to support optimizing the application both on the JRE and in a GraalVM native image context. For the 80% case, you shouldn't worry about a thing. But, sometimes, you may need to intervene to get the best results. This text aims to introduce the engine, its happy-path usage, and the corner-case use.
 
-Why would you need to intervene? What could go wrong? GraalVM native image compilation, that's what. GraalVM's native image compilation produces binaries that are lightning quick and super memory efficient. The caveat is that in order to achieve this magic trick, GraalVM's native image compiler needs to know when you do certain things, like reflection, proxies, JNI, serialization, etc. Somebody has to provide that configuration.
+Why would you need to intervene? What could go wrong? GraalVM native image compilation, that's what. GraalVM's native image compilation produces lightning-quick and super memory-efficient binaries. The caveat is that to achieve this magic trick, GraalVM's native image compiler needs to know when you do certain things, like reflection, proxies, JNI, serialization, etc. So somebody has to provide that configuration.
 
-The GraalVM native image compiler needs this configuration specified either as command line switches or as `.json` configuration files present  on the classpath - `META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json`. Ideally, each individual library will ship its own configuration. Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. But what about your code, written with Spring Framework? Spring (and Java, writ large) do a lot of dynamic things with user-provided types that should to be accounted for with configuration, or the GraalVM compilation will fail.
+The GraalVM native image compiler needs this configuration specified either as command line switches or as `.json` configuration files present on the classpath - `META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json`. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.
 
-In this release, we've introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation with no hassle. That's the dream, anyway, and we're largely there already. For a good many applications, it's already a reality. In this text, we'll look at the new AOT engine, GraalVM, and the increasingly rarer corner cases that'll require a bit of intervention.
+In this release, we've introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation. That's the dream, anyway, and we're essentially there already. In this text, we'll look at the new AOT engine, GraalVM, and the increasingly rarer corner cases requiring some intervention.
 
 == Introduction
 
@@ -22,15 +22,15 @@ I find it helpful to understand where we were to appreciate where we are now. Tr
 
 === Ingest
 
-The Spring application starts up and reads in all the configuration sources. Remember: Spring Framework is a dependency management framework. It needs to know how your various objects are constructed, their lifecycles (constructors, `InitializingBean#afterPropertiesSet`,`@PostConstruct`, `DisposableBean#destroy`, `@PreDestroy`), etc. So it reads the various configuration files from all the `@Configuration`-annotated classes in your application through component scanning, where Spring discovers classes annotated with `@Component`. This component scanning also discovers classes annotated with annotations that themselves have the `@Component` annotation on them, like `@Service`, `@Repository`, @Controller`, and `@RestController`. It also reads in configuration from Spring's classic XML configuration format. (I don't use the XML format, and haven't seen it in the wild in more than half a decade, but _still_...).
+The Spring application starts up and reads in all the configuration sources. Remember: Spring Framework is a dependency management framework. It needs to know how your various objects are constructed, their lifecycles (constructors, `InitializingBean#afterPropertiesSet`,`@PostConstruct`, `DisposableBean#destroy`, `@PreDestroy`), etc. So it reads the various configuration files from all the `@Configuration`-annotated classes in your application through component scanning, where Spring discovers classes annotated with `@Component`. This component scanning also discovers classes annotated with annotations that have the `@Component` annotation on them, like `@Service`, `@Repository`, @Controller`, and `@RestController`. It also reads in configuration from Spring's classic XML configuration format. (I don't use the XML format and haven't seen it in the wild in over half a decade, but _still_...).
 
 === `BeanFactory` creation of `BeanDefinition`  instances
-At this point, Spring turns all the various inputs into a metamodel representation of your objects, a `BeanFactory` full of `BeanDefinition` instances. These `BeanDefinition` instances describe the objects, their wiring, and more. They represent the constructors, annotations, properties to be injected, setters, etc.  The `BeanDefinition` instances describe everything required to describe an object and get to a valid state so that it may be given to other objects and generally start doing work.
+At this point, Spring turns all the various inputs into a metamodel representation of your objects, a `BeanFactory` full of `BeanDefinition` instances. These `BeanDefinition` instances describe the objects, wiring, and more. They represent the constructors, annotations, properties to be injected, setters, etc.  The `BeanDefinition` instances describe everything required to describe an object and get to a valid state so that it may be given to other objects and generally start doing work.
 
 Notably, at this phase, there are no live-fire beans. Nothing is opening ports and sockets, doing disk IO, etc. This phase in the `BeanFactory` does not involve any business logic.
 
 === Bean Creation
-At this point, Spring will take all the `BeanDefinition`   instances and create from them actual, live-fire beans. Spring will call constructors, invoke lifecycle methods, etc. At the conclusion of this phase, you'll have an application ready to serve production traffic. This is _good_ (TM). We like production, don't we?
+At this point, Spring will take all the `BeanDefinition`   instances and create actual, live-fire beans from them. Spring will call constructors, invoke lifecycle methods, etc. After this phase, you'll have an application ready to serve production traffic. This is _good_ (TM). We like production, don't we?
 
 Spring Boot 3 introduces a new phase, at compile time, to support AOT.
 
@@ -44,12 +44,12 @@ https://www.graalvm.org/[GraalVM] is a drop-in replacement for OpenJDK. It _is_ 
 
 To start, as always, we'll go to the https://start.spring.io[Spring Initialzr (start.spring.io)]. Choose Spring Boot 3.0 or later from the Spring Initializr. I'm using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I'm also using GraalVM 22.3. If you're using the fabulous https://sdkman.io/[SDKMAN utility], then you can do the following to get the same version of GraalVM that I have on my computer as of this writing (late 2022):
 
-[source,shell]
+[source, shell]
 ----
 sdk install java 22.3.r17-grl
 ----
 
-I've also added a few dependencies. We won't really touch on these dependencies in any great length, but they'll help us to demonstrate a few concepts, so I've added them.
+I've also added a few dependencies. We won't touch on these dependencies in any great length, but they'll help us to demonstrate a few concepts, so I've added them.
 
 * Web (`org.springframework.boot` : `spring-boot-starter-web`)
 * Actuator (`org.springframework.boot` : `spring-boot-starter-actuator`)
@@ -63,18 +63,18 @@ And of course, I've got a standard Spring Boot entry class.
 include::{source}/com/example/aot/AotApplication.java[]
 ----
 
-I won't add anything to this class. Instead, I'll create new `@Configuration`-annotated classes in sub-packages as we introduce new concepts. We won't revisit this class.
+I won't add anything to this class. Instead, as we introduce new concepts, I'll create new `@Configuration`-annotated classes in sub-packages. We won't revisit this class.
 
-Let's look at our first example of the new AOT engine in practice, a trivial and fairly typical application that works with a database and surfaces an HTTP endpoint like any other trivial Spring Boot application. Of course, you have seen this before.
+Let's look at our first example of the new AOT engine in practice. This trivial and fairly typical application works with a database and surfaces an HTTP endpoint like any other trivial Spring Boot application. But, of course, you have seen this before.
 
 [source,java]
 -----
 include::{source}/com/example/aot/basics/BasicsConfiguration.java[]
 -----
 <1> look ma, no Lombok!
-<2> this is using Spring Data JDBC and you can too!
+<2> this is using Spring Data JDBC, and you can too!
 
-You'll need some SQL schema, so add `src/main/resources/schema.sql` for our SQL interactions, so let's have Spring Boot create it for us on startup:
+You'll need some SQL schema, so add `src/main/resources/schema.sql` for our SQL interactions; so let's have Spring Boot create it for us on startup:
 
 [source,sql]
 ----
@@ -95,7 +95,7 @@ You should see some output on the console. It works. hurray. Moving on, let's tu
 mvn -Pnative -DskipTests native:compile
 ----
 
-That'll take a minute to finish, so now's a good time to pour a cup of coffee or tea. Maybe do a crossword puzzle. Reflect on the poor life choices you've made to get to this point where your JVM applications take around a minute to compile. It's a bit dispiriting, isn't it? But, always remember: good things come to those who wait!
+That'll take a minute to finish, so now's a good time to pour a cup of coffee or tea. Maybe do a crossword puzzle. Reflect on the poor life choices you've made to get to this point where your JVM applications take around a minute to compile. It's a bit dispiriting. But always remember: good things come to those who wait!
 
 You'll find the compiled binary in the `target` directory, named `aot`. Run it, and you'll see it starts up in no time at all. Like a lightbulb! And, the best part is that it takes very little memory. Of course, there are different ways to measure memory, but looking at the https://en.wikipedia.org/wiki/Resident_set_size[_resident set size_] is informative. Here's a script I use to measure this stuff called `rss.sh`:
 
@@ -109,7 +109,11 @@ RSS=`bc <<< "scale=1; ${RSS}/1024"`
 echo "${PID}: ${RSS}M"
 -----
 
-It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out. You can find the process identifier (PID) for the Spring Boot application in the console towards the top of the application's output. Take it and then pass it as the argument for `rss.sh`, like this:
+It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out. You can find the process identifier (PID) for the Spring Boot application in the console towards the top of the application's output.
+
+image::images/pid.png[]
+
+Take it and then pass it as the argument for `rss.sh`, like this:
 
 [source,shell]
 -----
@@ -120,7 +124,7 @@ On my 2021 M1 MacBook Pro, I tend to get numbers just south of 100MB. Not bad!  
 
 == The Spring component model
 
-So, we know the basic stuff's working. But Spring's got a rich, dynamic, multifaceted component model that can do amazing things. Let's look at some examples demonstrating a few interesting aspects of the Spring programming model, old and new(-ish). I hope, but don't know, that a lot of this will rehash old stuff for many of you. Feel free to skim this section and see if anything new in the headers strikes you as interesting. It's here because I wanted to be thorough and view the rich Spring component model through the prism of the new Spring AOT engine.
+So, we know the basic stuff's working. Spring's got a rich, dynamic, multifaceted component model that can do amazing things. So, let's look at some examples demonstrating a few interesting aspects of the Spring programming model, old and new(-ish). I hope, but don't know, that a lot of this will rehash old stuff for many of you. So, feel free to skim this section and see if anything new in the headers strikes you as interesting. It's here because I wanted to be thorough and view the rich Spring component model through the prism of the new Spring AOT engine.
 
 
 === See How They Run
@@ -132,7 +136,7 @@ You can compile and run all the code in the usual way as a GraalVM native image:
 mvn -DskipTests native:compile && ./target/aot
 ----
 
-Run the application, and you should see all the output from the previous examples, as expected. The best part? It'll have started in no time at all and be a far sight smaller as a binary and as a process occupying RAM. You can use the `rss.sh` script we introduced to measure the process' RSS.
+Run the application, and you should see all the output from the previous examples, as expected. The best part? It'll have started in no time and be a far sight smaller as a binary and a process occupying RAM. You can use the `rss.sh` script we introduced to measure the process' RSS.
 
 === Event Listeners
 
@@ -147,7 +151,7 @@ include::{source}/com/example/aot/events/EventsConfiguration.java[]
 <1> this is the first more traditional approach: a bean of type `ApplicationListener<T extends ApplicationEvent>`.
 <2> this is the newer style, which frees your code of any explicit dependencies on the Spring framework
 
-This example listens for two unrelated events. There. is no significance to these events, they demonstrate different ways of consuming Spring application events.
+This example listens for two unrelated events. Although there is no significance to these events for our example, they demonstrate different ways of consuming Spring application events.
 
 * `WebServerInitializedEvent` tells when the embedded web server has finished initializing.
 * The `ApplicationReadyEvent` gets called as late as possible, right before the application handles traffic.
@@ -158,10 +162,10 @@ These are just a few of the events that Spring and Spring Boot emit as part of t
 
 Sometimes objects require finessing and customization. Sometimes, creating an object becomes more complicated than just a simple constructor. Therefore, isolating this construction logic in a single place is helpful because it is reusable. There are at least two patterns that describe this sort of parameterized construction beside a constructor:
 
-* The fluid builder pattern
+* the fluid builder pattern
 * the factory pattern
 
-There's nothing Spring can do to support the first pattern: that's very much up to each implementor of the pattern how their types reflect the object creation patterns particular to their API. However, the Spring Framework `FactoryBean<T>` supports the second pattern. When you register a class of type `FactoryBean<T>` in the Spring context, it is the _product_ (an instance of type `T`) of that `FactoryBean<T>`, not the `FactoryBean<T>` itself, that is registered in the application context and made available for injection. In other words, you can't inject a reference to `FactoryBean<Foo>`, only `Foo`.
+There's nothing Spring can do to support the first pattern: that's very much up to each implementor how their types reflect the object creation patterns particular to their API. However, the Spring Framework `FactoryBean<T>` supports the second pattern. When you register a class of type `FactoryBean<T>` in the Spring context, it is the _product_ (an instance of type `T`) of that `FactoryBean<T>`, not the `FactoryBean<T>` itself, that is registered in the application context and made available for injection. In other words, you can't inject a reference to `FactoryBean<Foo>`, only `Foo`.
 
 Let's look at its use in a trivial example:
 
@@ -176,30 +180,30 @@ include::{source}/com/example/aot/factorybeans/FactoryBeansConfiguration.java[]
 
 Beans in Spring have a lifecycle governing a given object's lifetime. Unless you specify something precisely, the default scope is `singleton`. Here are some of the more commonly used scopes.
 
-* `singleton` - a bean is created when the application starts up and is destroyed when the application shuts down. A bean defined in this way is _global_ - all clients of the bean will see the same state. Take care to handle concurrent access to this state in the same way you would any multithreaded access.
-* `session` - a bean is created anew for each new HTTP Session. Each user with an HTTP session will have their own instance of the bean. Changes won't be visible to other clients.
-* `web` - each new HTTP request gets a new instance of the bean.
+* `singleton` - Spring creates a bean when the application starts up and destroys it when it shuts down. A bean defined in this way is _global_ - all clients of the bean will see the same state. So take care to handle concurrent access to this state in the same way you would any multithreaded access.
+* `session` - a bean is created anew for each new HTTP Session. Each user with an HTTP session will have their instance of the bean. Changes won't be visible to other clients.
+* `web` - each new HTTP request gets a new bean instance.
 * `thread` - beans are unique to each thread. Sort of like a `ThreadLocal`.
 
-This mechanism is pluggable, too, so implementors may provide their own scopes, as well. Spring does this across the portfolio, in projects like Spring Web Flow and Spring Batch. You'll also see it in third-party projects like the Flowable workflow engine.
+This mechanism is pluggable, too, so implementors may also provide their scopes. Spring does this across the portfolio in projects like Spring Web Flow and Spring Batch. You'll also see it in third-party projects like the Flowable workflow engine.
 
 [source,sql]
 ----
 include::{source}/com/example/aot/scopes/ScopesConfiguration.java[]
 ----
 <1> this bean is a `request` scoped, so it'll be created anew for each new incoming HTTP request.
-<2> this request-scoped bean should be different across different HTTP requests, but the same for successive accesses during the same HTTP request.
-<3> Spring is giving us a proxy, which won't be initialized with real values until the bean starts its lifecycle, bound to whatever externalities govern them.
+<2> this request-scoped bean should be different across different HTTP requests but the same for successive accesses during the same HTTP request.
+<3> Spring is giving us a proxy, which won't have a real instance until the bean starts its lifecycle, bound to whatever externalities govern them.
 
-Compile the application and then visit  `http://localhost:8080/scopes/context` in your browser a few times. You should see that the `UUID` is different in each HTTP request
+Compile the application and visit  `http://localhost:8080/scopes/context` in your browser a few times. You should see that the `UUID` differs in each HTTP request.
 
 === Qualifiers
 
 Qualifiers are conceptually very simple: given two types with the same interface, how does Spring choose which to inject in a given place? The answer is that we _qualify_ the bean we'd like.
 
-Suppose we're trying to build two applications that work with two competing mobile phone marketplace implementations, like the Apple AppStore and Android's Play store.
+Suppose we're trying to build two applications with competing mobile phone marketplace implementations, like the Apple AppStore and Android's Play store.
 
-We might model them with an interface, which we're calling `MobileMarketplace`. In this example, we have two implementations of that interface, and we've used the `@Qualifier` annotation on both the bean itself and the place where the bean is injected to. As long as the `String` `value` in the annotation matches, then Spring will inject the correct instance.  This mechanism goes even a bit further:  you can put `@Qualifier` on your own custom annotation and then use that annotation instead of `@Qualifier` directly on the various implementations. This practice helps you enforce a ubiquitous language, making your code's domain more approachable.
+We might model them with an interface, which we're calling `MobileMarketplace`. In this example, we have two implementations of that interface, and we've used the `@Qualifier` annotation on both the bean itself and the place where the Spring injects it. As long as the `String` `value` in the annotation matches, Spring will inject the correct instance.  This mechanism goes even further:  you can put `@Qualifier` on your custom annotation and then use that annotation instead of `@Qualifier` directly on the various implementations. This practice helps you enforce a ubiquitous language, making your code's domain more approachable.
 
 Let's look at an example:
 
@@ -210,17 +214,16 @@ include::{source}/com/example/aot/qualifiers/QualifiersConfiguration.java[]
 <1> this bean uses the `android` implementation
 <2> this bean uses the `apple` implementation
 <3> can't decide? Just inject a `Map<String,T>`, where `T` is the type you're looking for. Spring will provide a map of bean names to bean types.
-<4> here we create a meta-annotation.
-<5> here we create an implementation of the interface
+<4> we create a meta-annotation.
+<5> we implement the interface
 
-
-I love that I can directly define a bean's qualifier using the `@Qualifier` annotation and inject it into a particular site using the meta-annotation. Or, vice versa, or both. Spring doesn't care. _It just works_.
+I love that I can directly define a bean's qualifier using the `@Qualifier` annotation and inject it into a particular site using the meta-annotation. Or vice versa, or both. Spring doesn't care. _It just works_.
 
 Compile and run the code to the correct instances printed out.
 
 === Configuration Properties
 
-Spring Framework provides the `Environment` abstraction, which is basically a mapping between a `String` key and a `String` value. There is a strategy interface (`PropertyResolver`) for resolving these properties. Spring Boot can then take values in the `Environment` and map them to objects, either via setters or via their constructors. Here's an example:
+Spring Framework provides the `Environment` abstraction, mapping between a `String` key and a `String` value. In addition, there is a strategy interface (`PropertyResolver`) for resolving these properties. Spring Boot can then take values in the `Environment` and map them to objects via setters or their constructors. Here's an example:
 
 [source,java]
 -----
@@ -233,9 +236,9 @@ Compile and run the code to see the values reflected in the output.
 
 == Detecting that you're in a Native Image
 
-Sometimes hopefully not often! - you'll want to know whether your code is running in a native image context. This is useful because, as good as Spring's AOT engine is, we can't make it work perfectly in every situation, short of reviewing every line of code ever written. There are oddities that arise from working in a GraalVM native image, and it's important to be aware of those.
+Sometimes hopefully not often! - you'll want to know when your code runs in a native image context. Knowing when your application is running is helpful because, as good as Spring's AOT engine is, we can't make it work perfectly in every situation, short of reviewing every line of code written. Some oddities arise from working in a GraalVM native image, and it's essential to be aware of those.
 
-There is, mercifully, one useful System property that you can use here: `org.graalvm.native image.imagecode`.  We've encapsulated that check-in a method in Spring Framework: `NativeDetector.inNativeImage()`. Here it is in action.
+There is one helpful System property that you can use here: `org.graalvm.native image.imagecode`.  We've encapsulated that check-in a method in Spring Framework: `NativeDetector.inNativeImage()`. So here it is in action.
 
 [source,java]
 ----
@@ -244,7 +247,7 @@ include::{source}/com/example/aot/detection/DetectionConfiguration.java[]
 
 Run it on the JRE, and it'll return `false`. Run it in a GraalVM native image, and it'll return `true`.
 
-My first instinct when I learned about that property was to wrap it in a `Condition` object, and then use `@Conditional` to call that `Condition`, and thus make beans available in the Spring `BeanFactory` _conditionally_.
+My first instinct when I learned about that property was to wrap it in a `Condition` object and then use `@Conditional` to call that `Condition`, and thus make beans available in the Spring `BeanFactory` _conditionally_.
 
 I tried it, and it didn't work.
 
@@ -254,16 +257,16 @@ In an AOT application intended for GraalVM native image compilation, Spring Fram
 
 These interfaces also generate _new_, optimized code to recreate the state of the `BeanFactory` and skip the ingest phase. This new code and the contributed metadata are ultimately sent into the GraalVM native image compiler for compilation into a native image.
 
-Spring only includes the beans in the final build that are present in the `BeanFactory` at compile time. So, if you have a bean that wasn't created at compile time, because some `@Conditional` test evaluated to `false`, or because some profile wasn't active, then it won't be there in the native image. To that end, I'd strongly urge you to avoid using profiles if you intend to create a GraalVM native image. There are some `@Conditional` annotations you should avoid, too.
+Spring only includes the beans in the final build present in the `BeanFactory` at compile time. So, if you have a bean that wasn't created at compile time because some `@Conditional` test evaluated to `false`, or because some profile wasn't active, it won't be there in the native image. To that end, I'd strongly urge you to avoid using profiles if you intend to create a GraalVM native image. There are some `@Conditional` annotations you should avoid, too.
 
-`@Conditional` annotations are evaluated at compile time. The invariant conditions at compilation time and runtime - like `@ConditionalOnClass` and `@ConditionalOnProperty` - work just fine in the native world: the classes present at compile time are, by definition, the classes present at runtime. However, some conditions depend on ambient state, like whether you're running in a Kubernetes cluster (`@ConditionalOnCloudPlatform(platform=CloudPlatform.Kubernetes)`). Avoid these conditions, unless you plan on compiling your code in a Kubernetes cluster.
+Spring's AOT engine evaluates the `@Conditional` annotations at compile time. Some invariant conditions are the same at compilation time and runtime - like `@ConditionalOnClass` and `@ConditionalOnProperty`. They work just fine in the native world: the classes present at compile time are, by definition, the classes present at runtime. However, some conditions depend on ambient state, like whether you're running in a Kubernetes cluster (`@ConditionalOnCloudPlatform(platform=CloudPlatform.Kubernetes)`). Avoid these conditions, unless you plan on compiling your code in a Kubernetes cluster.
 
 == Application Migration
 
 So far, everything works well out of the box.
 
-- everything works so far, and that's certainly our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes things don't work as expected.
-- Sometimes they don't work because one of the libraries on the classpath or indeed your code itself has done something to run afoul of the aforementioned cases where you'll need to furnish configuration `.json` files
+- everything works so far, and that's our goal, that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of compilation as a GraalVM native image. But, sometimes things don't work as expected.
+- Sometimes, they don't work because one of the libraries on the classpath or indeed your code itself has done something to run afoul of the aforementioned cases where you'll need to furnish configuration `.json` files
 - [ Time :: video to express the passage of time]
 - The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30s or longer compiler times and long reset cycles are involved!
 - [on camera]
@@ -318,16 +321,16 @@ rm -of target
 
 We've talked about the `BeanFactory`. It's basically a container, an aggregation, of all the beans in your application. In earlier sections, we saw that the beans in the `BeanFactory` are created as `BeanDefinition` instances. These `BeanDefinition`s are the metamodel representation of your object graph. They describe all the dependencies, constructors, annotations, fields, etc., related to your bean instances.
 
-Spring makes it trivial to act on that collection of `BeanDefinition` instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The `BeanFactoryPostProcessor` is a callback interface that lets us have access to the `BeanFactory` and to manipulate the `BeanDefinition` instances. We can register new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The `BeanFactory` is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrella project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot appliations deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analuzing the `BeanFactory`, identifying infrastructure-related beans like `javax.sql.DataSource`, and then replacing them with a new bean of an identical interface, but with a connection pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a `DataSource` talking to an embedded H2 instance on your local machine, but when you deploy it, this `BeanFactoryPostProcessor` identifies connection strings in environment variables in the process space for the application and uses that to create a proper `DataSource` talking to that managed infrastructure, presumably on another host and port. And this was all transparent to the user, which is what we want.
+Spring makes it trivial to act on that collection of `BeanDefinition` instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The `BeanFactoryPostProcessor` is a callback interface that lets us have access to the `BeanFactory` and to manipulate the `BeanDefinition` instances. We can register new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The `BeanFactory` is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrella project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot applications deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analyzing the `BeanFactory`, identifying infrastructure-related beans like `javax.sql.DataSource`, and then replacing them with a new bean of an identical interface, but with a connection pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a `DataSource` talking to an embedded H2 instance on your local machine, but when you deploy it, this `BeanFactoryPostProcessor` identifies connection strings in environment variables in the process space for the application and uses that to create a proper `DataSource` talking to that managed infrastructure, presumably on another host and port. And this was all transparent to the user, which is what we want.
 
 The `BeanFactoryPostProcessor` is a great place to see _everything_ in the `BeanFactory` all in one place when the application starts up.
 
-the `BeanFactoryInitializationAotProcessor` is a new itnerface that is sort of a peer t the `BeanFactoryPostProcessor`. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) while analyzing the `BeanDefinition`s in the application.
+the `BeanFactoryInitializationAotProcessor` is a new interface that is sort of a peer t the `BeanFactoryPostProcessor`. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) while analyzing the `BeanDefinition`s in the application.
 
-It's important that you work only in terms of the `BeanDefinition` instances and bean names, in both these interfaces. Remember, at this point, Spring hasn't created any of theb eans. So, while you'll be able to call `BeanFactory#getBean(String)`, it'll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don't do this - it'll really screw things up!
+It's important that you work only in terms of the `BeanDefinition` instances and bean names, in both these interfaces. Remember, at this point, Spring hasn't created any of the eans. So, while you'll be able to call `BeanFactory#getBean(String)`, it'll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don't do this - it'll really screw things up!
 
 
-Let's look at a trivial example. We'll write a `BeanFactoryPostProcessor` that analyzes programmatically registers a new `BeanDefinition` in the application context. Would you ever nee dto do this? No. but it's hopefully illustrative. We'll use a subclass of `BeanFactoryPostProcessor` called `BeanDefinitionRegistryPostProcessor`, which gives us a `BeanFactory` downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we'll register is going to require some reflection using the Jackson JSON API, so we'll need to also register a GraalVM hint for it using a `BeanFactoryInitializationAotProcessor` contribution.
+Let's look at a trivial example. We'll write a `BeanFactoryPostProcessor` that analyzes programmatically registers a new `BeanDefinition` in the application context. Would you ever nee to do this? No. but it's hopefully illustrative. We'll use a subclass of `BeanFactoryPostProcessor` called `BeanDefinitionRegistryPostProcessor`, which gives us a `BeanFactory` downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we'll register is going to require some reflection using the Jackson JSON API, so we'll need to also register a GraalVM hint for it using a `BeanFactoryInitializationAotProcessor` contribution.
 
 
 [source,java]
@@ -338,7 +341,7 @@ include::{source}/com/example/aot/bfpp/BfppConfiguration.java[]
 <2> Note that the bean definitions here are registered with the `static` keyword. Spring will involve these beans very early in the lifecycle of the application context. It won't have any live fire beans except for these very early beans. So, we use `static` to avoid depending on anything from the `BeanFactory`. And don't force Spring to construct the `@Configuration` class containing the `@Bean` registration methods, too.
 <3> the `Listener` is a trivia `ApplicationListener` that, when run, will iterate over a collection of dummy DTOs and print them out using Jackson for JSON serialization. This serialization involves reflection, for which we'll need to furnish hints.
 <4> the first callback, the `ListenerBeanFactoryPostProcessor`, programmatically registers a new `BeanDefinition` of type `Listener` if a bean of the name we've specified in the variable doesn't already exist in the context. This object runs at runtime, in both the JRE and the AOT application. Here were changing, molding, the `BeanFactory`.
-<5> when we compile the application using the AOT engine, intending to biold a graalvm native image, Spring Boot will aso run the the `ListenerBeeanFactoryInitializationAotProcessor`, which - knoiwing that we'll eventually register a `Listener` bean - furnishes the requisite hints to make the JSON serialization of the `Product` records work.
+<5> when we compile the application using the AOT engine, intending to build a graalvm native image, Spring Boot will also run the the `ListenerBeeanFactoryInitializationAotProcessor`, which - knowing that we'll eventually register a `Listener` bean - furnishes the requisite hints to make the JSON serialization of the `Product` records work.
 
 These two interfaces work well together. They complement each other. The `BeanFactory` is the lowest level at which I'd write code. I don't want to write code in terms of the `BeanFactory` if i can avoid it. It is, as I said, the primordial ooze of your running application. Its the suggestion, the insinuation, the allusion to a valid working application. But it's not a working application. That comes only after those `BeanDefinition` instances are turned into valid objects. that comes next.
 
@@ -438,7 +441,7 @@ class MigrationsConfigurationTest {
 
 == a note on compile times
 
-You know. I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get _why_ it's happening. It's not hard to understand. GraalVm does a _lot_ of work - doing a full analysis of our code and all the code on the classpath. it's no wonder that it takes as much memory and time as it does. And it has already improved _dramatically_ even since I first started using it in earnest less than three years ago. It's a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. And it's almost a curse that they've improved as much as they have, because the compile times are now fast enough hat you don't have time to go pour a cup of coffeee or eat a cup of yogurt, but slow enough that you feel like you're being interrupted. Youre being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java and Go and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backwards. I kick off a compile and my mind wanders. i've been doing so many of these that now I'm starting to hear elevator music when I do a compile! Don't you hear elevator music? So I filed an issue. I want everyone else to hear elevator music, too. So I asked. It doesn't hurt to ask. I went to the official graalvm project and I asked. it seemed to resonate with people. one person even suggested which elevator music we should use. I love it! And, fabian nipehaus - of the official graalvm team at oracle, a PhD - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with a promising prototype. I love this prototype. He even had it print out some ASCII art so that peoplewould have something to look at. i was sad, to say the least, to see that he didn't think this would be accepted, if for no other reason than because of the copyrighted music. Dang! oh well. Hope _springs_ eternal.
+You know. I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get _why_ it's happening. It's not hard to understand. GraalVm does a _lot_ of work - doing a full analysis of our code and all the code on the classpath. it's no wonder that it takes as much memory and time as it does. And it has already improved _dramatically_ even since I first started using it in earnest less than three years ago. It's a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. And it's almost a curse that they've improved as much as they have, because the compile times are now fast enough that you don't have time to go pour a cup of coffee or eat a cup of yogurt, but slow enough that you feel like you're being interrupted. Youre being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java and Go and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backwards. I kick off a compile and my mind wanders. i've been doing so many of these that now I'm starting to hear elevator music when I do a compile! Don't you hear elevator music? So I filed an issue. I want everyone else to hear elevator music, too. So I asked. It doesn't hurt to ask. I went to the official graalvm project and I asked. it seemed to resonate with people. one person even suggested which elevator music we should use. I love it! And, fabian nipehaus - of the official graalvm team at oracle, a PhD - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with a promising prototype. I love this prototype. He even had it print out some ASCII art so that people would have something to look at. i was sad, to say the least, to see that he didn't think this would be accepted, if for no other reason than because of the copyrighted music. Dang! oh well. Hope _springs_ eternal.
 
 == Conclusion
 

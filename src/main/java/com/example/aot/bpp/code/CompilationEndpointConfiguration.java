@@ -20,16 +20,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Configuration
 class CompilationEndpointConfiguration {
 
+	// <1>
 	@Bean
 	CompilationEndpoint compilationEndpoint() {
 		return new CompilationEndpoint();
 	}
 
+	// <2>
 	@Bean
 	CompilationEndpointBeanRegistrationAotProcessor compilationEndpointBeanRegistrationAotProcessor() {
 		return new CompilationEndpointBeanRegistrationAotProcessor();
 	}
 
+	// <3>
 	@Bean
 	ApplicationListener<ApplicationReadyEvent> compilationEndpointListener(CompilationEndpoint endpoint) {
 		return event -> {
@@ -42,6 +45,27 @@ class CompilationEndpointConfiguration {
 
 }
 
+// <4>
+@Endpoint(id = "compilation")
+class CompilationEndpoint {
+
+	private final Map<String, Object> map = new ConcurrentHashMap<>();
+
+	CompilationEndpoint() { // default runtime version
+	}
+
+	CompilationEndpoint(Instant instant, File directory) {
+		map.putAll(Map.of("instant", instant, "directory", directory));
+	}
+
+	@ReadOperation
+	public Map<String, Object> compilation() {
+		return Map.of("compilation", this.map, "now", Instant.now());
+	}
+
+}
+
+// <5>
 class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistrationAotProcessor {
 
 	@Override
@@ -62,8 +86,10 @@ class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistratio
 
 				var outputBeanVariableName = "outputBean";
 				build.addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-						.addParameter(RegisteredBean.class, "registeredBean")
-						.addParameter(CompilationEndpoint.class, "inputBean").returns(CompilationEndpoint.class)
+						.addParameter(RegisteredBean.class, "registeredBean") //
+						.addParameter(CompilationEndpoint.class, "inputBean")//
+						.returns(CompilationEndpoint.class)
+						// <6>
 						.addCode(CodeBlock.builder()
 								.addStatement("$T $L = new $T( $T.ofEpochMilli($L), new $T($S))",
 										CompilationEndpoint.class, outputBeanVariableName, CompilationEndpoint.class,
@@ -75,25 +101,6 @@ class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistratio
 			var methodReference = generatedMethod.toMethodReference();
 			code.addInstancePostProcessor(methodReference);
 		};
-	}
-
-}
-
-@Endpoint(id = "compilation")
-class CompilationEndpoint {
-
-	private final Map<String, Object> map = new ConcurrentHashMap<>();
-
-	CompilationEndpoint() { // default runtime version
-	}
-
-	CompilationEndpoint(Instant instant, File directory) {
-		map.putAll(Map.of("instant", instant, "directory", directory));
-	}
-
-	@ReadOperation
-	public Map<String, Object> compilation() {
-		return Map.of("compilation", this.map, "now", Instant.now());
 	}
 
 }

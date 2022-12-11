@@ -18,10 +18,14 @@ import java.io.InputStreamReader;
 import java.util.stream.Stream;
 
 @Configuration
-@RegisterReflectionForBinding(Person.class)
 class MigrationsConfiguration {
 
+	// <1>
+	record Person(String id, String name) {
+	}
+
 	@Bean
+	// @RegisterReflectionForBinding(Person.class) // <2>
 	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
 	ApplicationListener<ApplicationReadyEvent> peopleListener(ObjectMapper objectMapper,
 			@Value("classpath:/data.csv") Resource csv) {
@@ -49,13 +53,12 @@ class MigrationsConfiguration {
 
 		@Override
 		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-			// hints.reflection().registerType(Person.class, MemberCategory.values());
 			hints.resources().registerPattern("data.csv");
+
+			// <4>
+			// hints.reflection().registerType(Person.class, MemberCategory.values());
 		}
 
 	}
 
-}
-
-record Person(String id, String name) {
 }

@@ -329,54 +329,68 @@ That said, running in the AOT mode is only  useful if you're trying to sift thro
 === Run the Java Agent
 
 
-You can run the program, and the agent alongside it, and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with `-Dagent=true` when running the app with maven (try `spring-boot:run). This will dump out config files in the `target/native/agent-output` directory. You can inspect those and then use those to tell you what could you'll need to contribute hints for. The Java agent dumps out _everything_, including some things that Spring's AOT engine will do automatically for you and thus you don't need to reproduce. I'd start with all the mentions of types across the various configuration files that are in the same packages as code in your application.
+You can run the program, and the agent alongside it, and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with `-Dagent=true` when running the app with maven (try `mvn spring-boot:run`). This will dump out config files in the `target/native/agent-output` directory. You can inspect those and then use those to tell you what could you'll need to contribute hints for. The Java agent dumps out _everything_, including some things that Spring's AOT engine will do automatically for you and thus you don't need to reproduce. I'd start with all the mentions of types across the various configuration files that are in the same packages as code in your application. That way you won't specify hints that Spring might've already done for you.
 
 Importantly: it'll also print out all the stuff that's random, and changes from one run to another. YOu can usually identify these as the classes with dollar signs in them or UUID-like names. Ignore those until the very end. They're probably not interesting.
 
-- **Demo** [`migration` or `reflection`]
-- create a `data.csv` with the following contents:
-```
-1,Madhura
-2,Yuxin
-3,Phil
-4,Violetta
-5,Stéphane
-6,Jürgen
-7,Dr. Syer
-8,Josh
-9,Marcin
-10,Candice
-```
 
-- write a program that loads some CSV data from the classpath, then uses it to create some `Customer` data and turn it into JSON to be logged on the  console using `ObjectMapper` for easy debugging.
-- this will require support for both `reflection-config.json` and `resources-config.json`.
--  contribute the java agent to the build:
-```
-<configuration>
-  <jvmArguments>
-   -agentlib:native-image-agent=config-output-dir=target/native-image
-</jvmArguments>
-```
+Configure the Spring Boot Maven build plugin to contribute a JVM argument:
 
-- then run it thusly
-```
-rm -of target
+[source,xml]
+----
+<plugin>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-maven-plugin</artifactId>
+    <configuration>
+        <jvmArguments>
+            -agentlib:native-image-agent=config-output-dir=target/native-image
+        </jvmArguments>
+        <!--....-->
+    </configuration>
+</plugin>
+----
 
+Then run it thusly:
+
+[source,shell]
+----
 ./mvnw -DskipTests clean package spring-boot:run
-```
-- have it tell us what kind of hints we'll need. Then well craft our first set of hints using the `RuntimeHintsRegistrar `and `RegisterforBinding`
-- the `RuntimeHintsRegistrar` is a convenient callback that you can easily declare in any `@Configuration` class with the `@ImportRuntimeHints(Class<?>)` annotation or via the `aot.factories` file.
-- for a lot of developers, these two tools - the Java agent and hints - may be enough to get the job done. This is hopefully as much as most application developers will need to know.
-- things get more interesting when you start to imagine infrastructure level concerns, and when you start looking at  purpose-built frameworks built on top of Spring Boot. Let's put on our infrastructure hats here and look at some of the meta model programming that Spring has supported since day 1, and how this new AOT compilation phase interacts with all that.
+----
+
+Inspect the `target/native-image/` directory. You'll find that the Java agent has written out a `reflect-config.json` file that tells us something is going to reflect upon the `Person` type at runtime. We can also see that there is an entry for the `data.csv` file in the `resource-config.json` file.
+
+It's important that you exhaust as many code paths as possible whiel running the Java agent. Perhaps you could run it while running your tests?  We want to make sure that you capture every scenario that may require configuration. Be sure to through all the `.json` configuration files and note every instance where one of the types we've created - like `Person` -  is present.
+
+At this point, I'd disable the Java agent, commenting it out in the Maven `pom.xml`. It's served  its purpose for now. Move the `native-image` directory aside so it doesn't get deleted later. If you try to compile and run the application   as a GraalVM native image, then you're going to want to consult these files.
 
 
+=== Soft-touch Refactorings to Enable AOT
 
+Let's look a bare bones example that could run afoul of GraalVM's native image compilation but for our interventions. Here's the completed program:
 
+[source,java]
+----
+include::{source}/com/example/aot/migrations/MigrationsConfiguration.java[]
+----
+<1> this program simply reads in CSV data (in the least production-worthy  way possible!) and maps the rows into `Person` instances
+<2> we know that the Jackson JSON marshalling library is going to need to reflect on those `Person` instances, so we've used Spring's convenient `@RegisterReflectionForBinding` annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or `@Configuration` class.
+<3> we  know that this program will need to read the `.csv` file from the `.jar`, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the `@ImportRuntimeHints` annotation to tell Spring to involve a class of type `RuntimeHintsRegistrar` in the compilation process so that we can programatically contribute those hints.
+<4> we _could_, as an alternative to using the `@RegisterReflectionForBinding` annotation, have simply contributed a hint for reflective access for that type here, too.
 
+You'll need to create a file with sample data called `src/main/resources/data.csv`. Here's the one I put in the code:
 
+[source,properties]
+----
+include::{root}/src/main/resources/data.csv[]
+----
 
+Now, for our example to work - or, rather, _not_ work, you'll need to comment out the lines where we use the `@RegisterReflectionForBinding` and `@ImportRuntimeHints` annotations. Then, run and compile the program. You should see it fail when you start it up as a GraalVM native image.
 
+The first error I got was related to being unable to load the `csv` file. So, restore the `@ImportRuntimeHints` annotation. Compile and run that. You'll get an error about serializing the `Person`. Restore the line with `@RegisterReflectionForBinding` and everything should work.
 
+Compile and run the program, and you should see the `Person` records printed on the console.
+
+This program starts up and uses the Jackson JSON marshalling library  directly to print out JSON representations of some objects. This is a bit of a contrived example: when was the last time you used Jackson to print out some objecets and _that's all_?   If we had returned the `Person` type from a Spring `@Controller`, then Spring would automatically know to register hints for it. Spring would still need the hint for the `.csv` file, however.
 
 == Processing the Bean Factory
 

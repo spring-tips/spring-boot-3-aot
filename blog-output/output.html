@@ -1222,6 +1222,59 @@ class DetectionConfiguration {
 <p>This will transform your Spring application, and generate GraalVm native image hints, in the <code>target/spring-aot</code> directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the <code>target</code> directory) and to see what code was generated (under the <code>sources</code> directory).</p>
 </div>
 <div class="paragraph">
+<p>There&#8217;s a lot of interesting stuff happening here. The most important thing, from my perspective, is the class where  all the  <code>@Configuration</code> classes, from our codebase and from the library classpath, were rewritten to use functional configuration. It&#8217;s generated code, and very long, so I will only excerpt some of it below:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">...
+import org.springframework.boot.context.properties.ConfigurationPropertiesBindingPostProcessor__BeanDefinitions;
+import org.springframework.boot.sql.init.dependency.DatabaseInitializationDependencyConfigurer__BeanDefinitions;
+import org.springframework.boot.validation.beanvalidation.MethodValidationExcludeFilter__BeanDefinitions;
+import org.springframework.boot.web.server.ErrorPageRegistrarBeanPostProcessor__BeanDefinitions;
+import org.springframework.boot.web.server.WebServerFactoryCustomizerBeanPostProcessor__BeanDefinitions;
+import org.springframework.context.event.DefaultEventListenerFactory__BeanDefinitions;
+import org.springframework.context.event.EventListenerMethodProcessor__BeanDefinitions;
+import org.springframework.data.repository.core.support.PropertiesBasedNamedQueries__BeanDefinitions;
+import org.springframework.data.repository.core.support.RepositoryComposition__BeanDefinitions;
+import org.springframework.data.web.config.ProjectingArgumentResolverRegistrar__BeanDefinitions;
+import org.springframework.data.web.config.SpringDataJacksonConfiguration__BeanDefinitions;
+import org.springframework.data.web.config.SpringDataWebConfiguration__BeanDefinitions;
+import org.springframework.transaction.annotation.AbstractTransactionManagementConfiguration__BeanDefinitions;
+import org.springframework.transaction.annotation.ProxyTransactionManagementConfiguration__BeanDefinitions;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurationSupport__BeanDefinitions;
+
+/**
+ * Register bean definitions for the bean factory.
+ */
+public class AotApplication__BeanFactoryRegistrations {
+  /**
+   * Register the bean definitions.
+   */
+  public void registerBeanDefinitions(DefaultListableBeanFactory beanFactory) {
+    beanFactory.registerBeanDefinition("org.springframework.context.event.internalEventListenerProcessor", EventListenerMethodProcessor__BeanDefinitions.getInternalEventListenerProcessorBeanDefinition());
+    beanFactory.registerBeanDefinition("org.springframework.context.event.internalEventListenerFactory", DefaultEventListenerFactory__BeanDefinitions.getInternalEventListenerFactoryBeanDefinition());
+    beanFactory.registerBeanDefinition("aotApplication", AotApplication__BeanDefinitions.getAotApplicationBeanDefinition());
+    beanFactory.registerBeanDefinition("basicsConfiguration", BasicsConfiguration__BeanDefinitions.getBasicsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("bfppConfiguration", BfppConfiguration__BeanDefinitions.getBfppConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("compilationEndpointConfiguration", CompilationEndpointConfiguration__BeanDefinitions.getCompilationEndpointConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("orderService", OrderService__BeanDefinitions.getOrderServiceBeanDefinition());
+    beanFactory.registerBeanDefinition("proxiesConfiguration", ProxiesConfiguration__BeanDefinitions.getProxiesConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("componentsConfiguration", ComponentsConfiguration__BeanDefinitions.getComponentsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("greetingsController", GreetingsController__BeanDefinitions.getGreetingsControllerBeanDefinition());
+    beanFactory.registerBeanDefinition("detectionConfiguration", DetectionConfiguration__BeanDefinitions.getDetectionConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("eventsConfiguration", EventsConfiguration__BeanDefinitions.getEventsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("factoryBeansConfiguration", FactoryBeansConfiguration__BeanDefinitions.getFactoryBeansConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("migrationsConfiguration", MigrationsConfiguration__BeanDefinitions.getMigrationsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("propertiesConfiguration", PropertiesConfiguration__BeanDefinitions.getPropertiesConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("appStore", AppStore__BeanDefinitions.getAppStoreBeanDefinition());
+    beanFactory.registerBeanDefinition("playStore", PlayStore__BeanDefinitions.getPlayStoreBeanDefinition());
+...</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We&#8217;ll dive more into what&#8217;s happening here, later.</p>
+</div>
+<div class="paragraph">
 <p>You can  run the AOT optimized and generated code on the JRE by using the  <code>-DspringAot=true</code> switch. Thus:</p>
 </div>
 <div class="listingblock">
@@ -1300,13 +1353,13 @@ class DetectionConfiguration {
 <p>It&#8217;s important that you exhaust as many code paths as possible whiel running the Java agent. Perhaps you could run it while running your tests?  We want to make sure that you capture every scenario that may require configuration. Be sure to through all the <code>.json</code> configuration files and note every instance where one of the types we&#8217;ve created - like <code>Person</code> -  is present.</p>
 </div>
 <div class="paragraph">
-<p>At this point, I&#8217;d disable the Java agent, commenting it out in the Maven <code>pom.xml</code>. It&#8217;s served  its purpose for now. Move the <code>native-image</code> directory aside so it doesn&#8217;t get deleted later. If you try to compile and run the application   as a GraalVM native image, then you&#8217;re going to want to consult these files.</p>
+<p>At this point, I&#8217;d disable the Java agent, commenting it out in the Maven <code>pom.xml</code>. It&#8217;s served  its purpose for now. Move the <code>native-image</code> directory aside so it doesn&#8217;t get deleted later. If you try to compile and run the application   as a GraalVM native image, and it fails, then you&#8217;re going to want to consult these files.</p>
 </div>
 </div>
 <div class="sect2">
 <h3 id="_soft_touch_refactorings_to_enable_aot">Soft-touch Refactorings to Enable AOT</h3>
 <div class="paragraph">
-<p>Let&#8217;s look a bare bones example that could run afoul of GraalVM&#8217;s native image compilation but for our interventions. Here&#8217;s the completed program:</p>
+<p>Let&#8217;s look a bare bones example that could run afoul of GraalVM&#8217;s native image compilation but for our interventions. Here&#8217;s the completed program, complete with code to support the Spring AOT engine&#8217;s work turning our application into a GraalVM native image:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1340,7 +1393,7 @@ class MigrationsConfiguration {
 	// @RegisterReflectionForBinding(Person.class) // <b class="conum">(2)</b>
 	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
 	ApplicationListener&lt;ApplicationReadyEvent&gt; peopleListener(ObjectMapper objectMapper,
-			@Value("classpath:/data.csv") Resource csv) {
+			@Value("classpath:/data.csv") Resource csv) { // <b class="conum">(3)</b>
 		return new ApplicationListener&lt;ApplicationReadyEvent&gt;() {
 			@SneakyThrows
 			@Override
@@ -1385,7 +1438,7 @@ class MigrationsConfiguration {
 <p>we know that the Jackson JSON marshalling library is going to need to reflect on those <code>Person</code> instances, so we&#8217;ve used Spring&#8217;s convenient <code>@RegisterReflectionForBinding</code> annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or <code>@Configuration</code> class.</p>
 </li>
 <li>
-<p>we  know that this program will need to read the <code>.csv</code> file from the <code>.jar</code>, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the <code>@ImportRuntimeHints</code> annotation to tell Spring to involve a class of type <code>RuntimeHintsRegistrar</code> in the compilation process so that we can programatically contribute those hints.</p>
+<p>we know that this program will need to read the <code>.csv</code> file from the <code>.jar</code>, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the <code>@ImportRuntimeHints</code> annotation to tell Spring to involve a class of type <code>RuntimeHintsRegistrar</code> in the compilation process so that we can programmatically contribute those hints.</p>
 </li>
 <li>
 <p>we <em>could</em>, as an alternative to using the <code>@RegisterReflectionForBinding</code> annotation, have simply contributed a hint for reflective access for that type here, too.</p>
@@ -1410,10 +1463,13 @@ class MigrationsConfiguration {
 </div>
 </div>
 <div class="paragraph">
-<p>Now, for our example to work - or, rather, <em>not</em> work, you&#8217;ll need to comment out the lines where we use the <code>@RegisterReflectionForBinding</code> and <code>@ImportRuntimeHints</code> annotations. Then, run and compile the program. You should see it fail when you start it up as a GraalVM native image.</p>
+<p>Run this on the JRE and it should just work. As expected.</p>
 </div>
 <div class="paragraph">
-<p>The first error I got was related to being unable to load the <code>csv</code> file. So, restore the <code>@ImportRuntimeHints</code> annotation. Compile and run that. You&#8217;ll get an error about serializing the <code>Person</code>. Restore the line with <code>@RegisterReflectionForBinding</code> and everything should work.</p>
+<p>Now, for our example to work - or, rather, <em>not</em> work, in a GraalVM native image, you&#8217;ll need to comment out the lines where we use the <code>@RegisterReflectionForBinding</code> and <code>@ImportRuntimeHints</code> annotations. Then, run and compile the program. You should see  failures when you start it up as a GraalVM native image.</p>
+</div>
+<div class="paragraph">
+<p>The first error I got was related to being unable to load the <code>.csv</code> file. So, restore the <code>@ImportRuntimeHints</code> annotation. Compile and run that as a GraalVM native image. You&#8217;ll get an error about serializing the <code>Person</code>. Restore the line with <code>@RegisterReflectionForBinding</code> and everything should work.</p>
 </div>
 <div class="paragraph">
 <p>Compile and run the program, and you should see the <code>Person</code> records printed on the console.</p>
@@ -1910,7 +1966,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670801386959L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670803100965L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -2009,7 +2065,7 @@ class CustomerRepositoryTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-11 15:29:34 -0800
+Last updated 2022-12-11 15:58:13 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

@@ -293,6 +293,17 @@ mvn clean compile spring-boot:process-aot package
 
 This will transform your Spring application, and generate GraalVm native image hints, in the `target/spring-aot` directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the `target` directory) and to see what code was generated (under the `sources` directory).
 
+There's a lot of interesting stuff happening here. The most important thing, from my perspective, is the class where  all the  `@Configuration` classes, from our codebase and from the library classpath, were rewritten to use functional configuration. It's generated code, and very long, so I will only excerpt some of it below:
+
+[source,java]
+----
+...
+include::{root}/target/spring-aot/main/sources/com/example/aot/AotApplication__BeanFactoryRegistrations.java[lines=140..180]
+...
+----
+
+We'll dive more into what's happening here, later.
+
 You can  run the AOT optimized and generated code on the JRE by using the  `-DspringAot=true` switch. Thus:
 
 [source,shell]
@@ -361,12 +372,12 @@ Inspect the `target/native-image/` directory. You'll find that the Java agent ha
 
 It's important that you exhaust as many code paths as possible whiel running the Java agent. Perhaps you could run it while running your tests?  We want to make sure that you capture every scenario that may require configuration. Be sure to through all the `.json` configuration files and note every instance where one of the types we've created - like `Person` -  is present.
 
-At this point, I'd disable the Java agent, commenting it out in the Maven `pom.xml`. It's served  its purpose for now. Move the `native-image` directory aside so it doesn't get deleted later. If you try to compile and run the application   as a GraalVM native image, then you're going to want to consult these files.
+At this point, I'd disable the Java agent, commenting it out in the Maven `pom.xml`. It's served  its purpose for now. Move the `native-image` directory aside so it doesn't get deleted later. If you try to compile and run the application   as a GraalVM native image, and it fails, then you're going to want to consult these files.
 
 
 === Soft-touch Refactorings to Enable AOT
 
-Let's look a bare bones example that could run afoul of GraalVM's native image compilation but for our interventions. Here's the completed program:
+Let's look a bare bones example that could run afoul of GraalVM's native image compilation but for our interventions. Here's the completed program, complete with code to support the Spring AOT engine's work turning our application into a GraalVM native image:
 
 [source,java]
 ----
@@ -374,7 +385,7 @@ include::{source}/com/example/aot/migrations/MigrationsConfiguration.java[]
 ----
 <1> this program simply reads in CSV data (in the least production-worthy  way possible!) and maps the rows into `Person` instances
 <2> we know that the Jackson JSON marshalling library is going to need to reflect on those `Person` instances, so we've used Spring's convenient `@RegisterReflectionForBinding` annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or `@Configuration` class.
-<3> we  know that this program will need to read the `.csv` file from the `.jar`, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the `@ImportRuntimeHints` annotation to tell Spring to involve a class of type `RuntimeHintsRegistrar` in the compilation process so that we can programatically contribute those hints.
+<3> we know that this program will need to read the `.csv` file from the `.jar`, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the `@ImportRuntimeHints` annotation to tell Spring to involve a class of type `RuntimeHintsRegistrar` in the compilation process so that we can programmatically contribute those hints.
 <4> we _could_, as an alternative to using the `@RegisterReflectionForBinding` annotation, have simply contributed a hint for reflective access for that type here, too.
 
 You'll need to create a file with sample data called `src/main/resources/data.csv`. Here's the one I put in the code:
@@ -384,9 +395,11 @@ You'll need to create a file with sample data called `src/main/resources/data.cs
 include::{root}/src/main/resources/data.csv[]
 ----
 
-Now, for our example to work - or, rather, _not_ work, you'll need to comment out the lines where we use the `@RegisterReflectionForBinding` and `@ImportRuntimeHints` annotations. Then, run and compile the program. You should see it fail when you start it up as a GraalVM native image.
+Run this on the JRE and it should just work. As expected.
 
-The first error I got was related to being unable to load the `csv` file. So, restore the `@ImportRuntimeHints` annotation. Compile and run that. You'll get an error about serializing the `Person`. Restore the line with `@RegisterReflectionForBinding` and everything should work.
+Now, for our example to work - or, rather, _not_ work, in a GraalVM native image, you'll need to comment out the lines where we use the `@RegisterReflectionForBinding` and `@ImportRuntimeHints` annotations. Then, run and compile the program. You should see  failures when you start it up as a GraalVM native image.
+
+The first error I got was related to being unable to load the `.csv` file. So, restore the `@ImportRuntimeHints` annotation. Compile and run that as a GraalVM native image. You'll get an error about serializing the `Person`. Restore the line with `@RegisterReflectionForBinding` and everything should work.
 
 Compile and run the program, and you should see the `Person` records printed on the console.
 
@@ -404,9 +417,7 @@ the `BeanFactoryInitializationAotProcessor` is a new interface that is sort of a
 
 It's important that you work only in terms of the `BeanDefinition` instances and bean names, in both these interfaces. Remember, at this point, Spring hasn't created any of the eans. So, while you'll be able to call `BeanFactory#getBean(String)`, it'll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don't do this - it'll really screw things up!
 
-
 Let's look at a trivial example. We'll write a `BeanFactoryPostProcessor` that analyzes programmatically registers a new `BeanDefinition` in the application context. Would you ever nee to do this? No. but it's hopefully illustrative. We'll use a subclass of `BeanFactoryPostProcessor` called `BeanDefinitionRegistryPostProcessor`, which gives us a `BeanFactory` downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we'll register is going to require some reflection using the Jackson JSON API, so we'll need to also register a GraalVM hint for it using a `BeanFactoryInitializationAotProcessor` contribution.
-
 
 [source,java]
 ----

@@ -28,7 +28,7 @@ class MigrationsConfiguration {
 	// @RegisterReflectionForBinding(Person.class) // <2>
 	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
 	ApplicationListener<ApplicationReadyEvent> peopleListener(ObjectMapper objectMapper,
-			@Value("classpath:/data.csv") Resource csv) {
+			@Value("classpath:/data.csv") Resource csv) { // <3>
 		return new ApplicationListener<ApplicationReadyEvent>() {
 			@SneakyThrows
 			@Override

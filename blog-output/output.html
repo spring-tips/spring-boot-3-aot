@@ -1390,7 +1390,7 @@ class MigrationsConfiguration {
 	}
 
 	@Bean
-	// @RegisterReflectionForBinding(Person.class) // <b class="conum">(2)</b>
+	@RegisterReflectionForBinding(Person.class) // <b class="conum">(2)</b>
 	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
 	ApplicationListener&lt;ApplicationReadyEvent&gt; peopleListener(ObjectMapper objectMapper,
 			@Value("classpath:/data.csv") Resource csv) { // <b class="conum">(3)</b>
@@ -1404,7 +1404,6 @@ class MigrationsConfiguration {
 							.map(row -&gt; new Person(row[0], row[1])).map(person -&gt; json(person, objectMapper))
 							.forEach(System.out::println);
 				}
-
 			}
 		};
 	}
@@ -1966,7 +1965,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670803398026L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670828796107L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -1982,67 +1981,106 @@ public class CompilationEndpoint__CompilationEndpointFeature {
 <h2 id="_testing">Testing</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Indeed, all of this GraalVM AOT native image machinery is kind of mind-bending, to me, if I&#8217;m honest! In all that we&#8217;ve seen, I hope you feel that you know what to look at to identify and work around issues you discover. Being able to fix an issue is critical to success with a technology. But how do you ensure that it <em>stays</em> fixed going forward? This is where Spring&#8217;s rich testing support comes in. It too has been updated to work in a GraalVM native image context!</p>
+<p>Indeed, <em>all</em> of this GraalVM AOT native image machinery is kind of mind-bending, to me, if I&#8217;m honest! In all that we&#8217;ve seen, I hope you feel that you know what to look at to identify and work around issues you discover. Being able to fix an issue is critical to success with a technology. But how do you ensure that it <em>stays</em> fixed going forward? This is where Spring&#8217;s rich testing support comes in. It, too, has been updated to work in a GraalVM native image context!</p>
 </div>
 <div class="paragraph">
-<p>testing is an incredibly important part of the story. The good news is, we&#8217;ve done a ton of work to make testing <strong>just work</strong> in a native image context. you can run a maven build or a Gradle build in native mode and you&#8217;ll get two output artifacts: one for tests, one for the production code. Fair warning tho! This&#8217;ll make the compilation take twice as long! That could be a few minutes.</p>
+<p>Testing is an incredibly important part of the story. The good news is, we&#8217;ve done a ton of work to make testing <strong>just work</strong> in a native image context.</p>
 </div>
 <div class="paragraph">
-<p>lets look at some examples of tests:</p>
+<p>You can run a Maven build or a Gradle build in native mode.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shell hljs" data-lang="shell">mvn -PnativeTest test</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You&#8217;ll get two output artifacts: one for tests, one for the production code. Fair warning tho! Producing the test code as a native image effectively doubles the already interminable compile time! That could be a few minutes. When the compilation finishes, there&#8217;ll be a binary in the <code>target</code> directory called <code>native-tests</code>. Run that to execute the test code as a native image.</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">package com.example.aot.basics;
 
-import org.junit.Jupiter.API.Assertions;
-import org.junit.Jupiter.API.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+// <b class="conum">(1)</b>
 @SpringBootTest(properties = "spring.main.web-application-type=none")
 class CustomerRepositoryTest {
 
-    private final CustomerRepository repository;
+	private final CustomerRepository repository;
 
-    CustomerRepositoryTest(@Autowired CustomerRepository repository) {
-        this.repository = repository;
-    }
+	CustomerRepositoryTest(@Autowired CustomerRepository repository) {
+		this.repository = repository;
+	}
 
-    @Test
-    void save() throws Exception {
-        var saved = this.repository.save(new Customer(null, "Jürgen")) ;
-        Assertions.assertNotNull(saved.id() );
-    }
+	@Test
+	void persist() {
+		var saved = repository.save(new Customer(null, "Name"));
+		Assertions.assertNotNull(saved.id());
+		Assertions.assertNotNull(saved);
+	}
+
 }</code></pre>
 </div>
 </div>
-<div class="ulist">
-<ul>
+<div class="colist arabic">
+<ol>
 <li>
-<p>run with the <code>nativeTest</code> Maven profile, e.g.:  `mvn  -PnativeTest,native clean package  &amp;&amp; ./target/aot      `</p>
+<p>we are creating a Spring <code>ApplicationContext</code> and then using it to inject references to beans, like the <code>CustomerRepository</code> we created when we looked at AOT fundamentals much earlier on.</p>
 </li>
-<li>
-<p>there&#8217;s a new binary in the <code>target</code> directory called <code>native-tests</code></p>
-</li>
-<li>
-<p>show how you can write tests things like the predicates themselves with <code>RuntimeHintsPredicates</code>:</p>
-</li>
-</ul>
+</ol>
+</div>
+<div class="paragraph">
+<p>The basics work here. There are some exceptions; you may encounter issues with Mockito and the like. But the basics work. Try it out!</p>
+</div>
+<div class="paragraph">
+<p>It&#8217;s good that the basics work, too. It means that we can run the usual test harness against our business logic and confirm to whatever extent we&#8217;d like that things work as they did before. but what about the new code designed to support turning your application into a GraalVM native image? What about the hints that you register for a given type using the Spring AOT engine? Spring has you covered. You can use the new <code>RuntimeHintsPredicates</code> type to confirm that the hints you&#8217;ve designed are working as expected.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">class MigrationsConfigurationTest {
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">package com.example.aot.migrations;
 
-    @Test
-    void hints() {
-        var runtimeHints = new RuntimeHints();
-        var registrar = new MigrationsConfiguration.MigrationsRuntimeHintsRegistrar();
-        var classLoader = getClass().getClassLoader();
-        registrar.registerHints(runtimeHints, classLoader);
-        assertThat(RuntimeHintsPredicates.resource().forResource("data.csv")).accepts(runtimeHints);
-    }
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
+
+class MigrationsConfigurationTest {
+
+	@Test
+	void hints() {
+		var hints = new RuntimeHints();
+		// <b class="conum">(1)</b>
+		var registrar = new MigrationsConfiguration.MigrationsRuntimeHintsRegistrar();
+		var classloader = getClass().getClassLoader();
+		// <b class="conum">(2)</b>
+		registrar.registerHints(hints, classloader);
+		// <b class="conum">(3)</b>
+		Assertions.assertThat(RuntimeHintsPredicates.resource().forResource("data.csv")).accepts(hints);
+
+	}
+
 }</code></pre>
 </div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>create an instance of our implementation on the <code>RuntimeHintsRegistrar</code> interface</p>
+</li>
+<li>
+<p>call <code>RuntimeHintsRegistrar#registerHints</code> on our implementation, passing in mock instances of <code>RuntimeHints</code> and the current <code>ClassLoader</code></p>
+</li>
+<li>
+<p>use the <code>RuntimeHintsPredicates</code> type to make certain assertions about the state of the <code>RuntimeHints</code> afterwards</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>The testing support in Spring is exhaustive, and the Spring Boot even more so. It is not surprising thus that Spring&#8217;s new AOT engine would further move the needle.</p>
 </div>
 </div>
 </div>
@@ -2050,7 +2088,21 @@ class CustomerRepositoryTest {
 <h2 id="_a_note_on_compile_times">A Note on Compile Times</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>You know. I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. it&#8217;s no wonder that it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. And it&#8217;s almost a curse that they&#8217;ve improved as much as they have, because the compile times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt, but slow enough that you feel like you&#8217;re being interrupted. Youre being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java and Go and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backwards. I kick off a compile and my mind wanders. i&#8217;ve been doing so many of these that now I&#8217;m starting to hear elevator music when I do a compile! Don&#8217;t you hear elevator music? So I filed an issue. I want everyone else to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official graalvm project and I asked. it seemed to resonate with people. one person even suggested which elevator music we should use. I love it! And, fabian nipehaus - of the official graalvm team at oracle, a PhD - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with a promising prototype. I love this prototype. He even had it print out some ASCII art so that people would have something to look at. i was sad, to say the least, to see that he didn&#8217;t think this would be accepted, if for no other reason than because of the copyrighted music. Dang! oh well. Hope <em>springs</em> eternal.</p>
+<p>You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. it&#8217;s no wonder that it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous <a href="https://xkcd.com/303/">XKCD "compiling" cartoon</a>.</p>
+</div>
+<div class="paragraph">
+<p>And it&#8217;s almost a curse that they&#8217;ve improved as much as they have, because the compilation times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt, but slow enough that you feel like you&#8217;re being interrupted. You&#8217;re being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java and Go and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backwards. I kick off a compilation and my mind wanders. i&#8217;ve been doing so many of these that now I&#8217;m starting to hear elevator music when I  compile! Don&#8217;t you hear elevator music? <a href="https://github.com/oracle/graal/issues/5327">So I filed an issue</a>. I want everyone <em>else</em> to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official GraalVM project and I asked. it seemed to <a href="https://github.com/oracle/graal/issues/5327#issue-1429805241">resonate with people</a>. One person even made a suggestion as to <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1297108398">which elevator music</a> should be played (one of the soundtracks from the Bond film <a href="https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg"><em>Goldeneye</em></a>, natch). I love it! And, <a href="https://github.com/fniephaus">Fabio Niephaus</a> - of the official GraalVM teammembers at Oracle, a PhD - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with <em>a promising prototype</em>.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="./images/joshlong-mode.png" alt="joshlong mode">
+</div>
+</div>
+<div class="paragraph">
+<p>To say that I love this prototype would be an understatement!  I was sad, of course, to see that he didn&#8217;t think this would be accepted, if for no other reason than because of the copyrighted music. Dang! oh well. Hope <em>springs</em> eternal.</p>
+</div>
+<div class="paragraph">
+<p>But, something good <em>did</em> come of this: there are some interesting ideas <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1308971081">discussed</a> around how to have a bell chime (or indeed any other sound played) when the compilation finishes. At least this way you&#8217;d never feel like you wasted precious time if you step away for a minute!</p>
 </div>
 </div>
 </div>
@@ -2058,20 +2110,23 @@ class CustomerRepositoryTest {
 <h2 id="_conclusion">Conclusion</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>We&#8217;ve come a long way! When I started covering Spring Native (the predecessor to what would eventually become Spring Framework 6&#8217;s AOT engine) in 2020, a build took <em>10 minutes</em> and only worked for the smallest and most specific scenarios. Now, here we are in 2022 and I can all but effortlessly get a Spring app working in a GraalVM native image context in less than a minute.
-- the performance and memory usage implications are hard to ignore, and I think the inertia required to make the move to AOT will be become easier and easier to obtain in the next days, weeks, months and years, as the community embraces Spring&#8217;s newfound AOT support.
-- I hope this video makes it easier for everyone, application and framework developers alike, to leverage spring boot 3 and spring framework 6.
-- obviously, you won&#8217;t be starved for examples if you need guidance in implementing this stuff in your own code.
-- Just look for pointers to types like <code>RuntimeHintsRegistrar</code>, <code>BeanRegistrationAotProcessor</code>, and <code>BeanFactoryInitializationAotProcessor</code> in the Spring Boot codebase! And those don&#8217;t even begin to cover the implementations provided by the projects themselves, like Spring Security, Spring Data, Spring Cloud, Spring Shell, Spring Integration, and Spring Batch.
-- We&#8217;ve only just begun to scratch the surface here, my friends.
-- Now, bear in mind that things may change in relatively minor ways in the coming weeks and months leading to spring boot 3 later this year, but conceptually, what you&#8217;ve seen here today is the future, and it&#8217;s here today.</p>
+<p>We&#8217;ve come a long way! When I started covering Spring Native (the predecessor to what would eventually become Spring Framework 6&#8217;s AOT engine) in 2020, a build took <em>10 minutes</em> and only worked for the smallest and most specific of scenarios. Now, here we are in 2022 and I can all but effortlessly get a Spring app working in a GraalVM native image context in less than a minute.</p>
+</div>
+<div class="paragraph">
+<p>The performance and memory usage implications are hard to ignore, and I think the inertia required to make the move to AOT will be become easier and easier to obtain in the next days, weeks, months and years, as the community embraces Spring&#8217;s newfound AOT support. I hope this video makes it easier for everyone, application and framework developers alike, to leverage spring boot 3 and spring framework 6. Obviously, you won&#8217;t be starved for examples if you need guidance in implementing this stuff in your own code. Just look for pointers to types like <code>RuntimeHintsRegistrar</code>, <code>BeanRegistrationAotProcessor</code>, and <code>BeanFactoryInitializationAotProcessor</code> in the Spring Boot codebase! And those don&#8217;t even begin to cover the implementations provided by the projects themselves, like Spring Security, Spring Data, Spring Cloud, Spring Shell, Spring Integration, and Spring Batch. We&#8217;ve only just begun to scratch the surface here, my friends. And so too has the community. That said, things are moving <em>quickly</em>: As I write this, there&#8217;s already work nearly- or already- completed for various opensource projects like Axon, Vaadin, Hilla Framework, MyBatis, JHipster, the official Kubernetes Java client, JobRunr, and so many others besides.</p>
+</div>
+<div class="paragraph">
+<p>GraalVM native image technology could be a <em>very</em> powerful way to build applications better suited for production. This saves costs and helps you build more reliable systems. Spring&#8217;s AOT engine helps you introduce new possibilities, like serverless, embedded, and infrastructure, for which Spring may not have been considered ideal in the past.</p>
+</div>
+<div class="paragraph">
+<p>I hope this humble text has helped you get started, and that you&#8217;re able to go to the Spring Initialzr and generate your next value producing, production-bound Spring Boot application with GraalVM natie image support!</p>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-11 16:03:12 -0800
+Last updated 2022-12-11 23:06:27 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

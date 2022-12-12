@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+// <1>
 @SpringBootTest(properties = "spring.main.web-application-type=none")
 class CustomerRepositoryTest {
 

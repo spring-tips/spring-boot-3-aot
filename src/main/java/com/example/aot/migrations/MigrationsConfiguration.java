@@ -25,7 +25,7 @@ class MigrationsConfiguration {
 	}
 
 	@Bean
-	// @RegisterReflectionForBinding(Person.class) // <2>
+	@RegisterReflectionForBinding(Person.class) // <2>
 	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
 	ApplicationListener<ApplicationReadyEvent> peopleListener(ObjectMapper objectMapper,
 			@Value("classpath:/data.csv") Resource csv) { // <3>
@@ -39,7 +39,6 @@ class MigrationsConfiguration {
 							.map(row -> new Person(row[0], row[1])).map(person -> json(person, objectMapper))
 							.forEach(System.out::println);
 				}
-
 			}
 		};
 	}

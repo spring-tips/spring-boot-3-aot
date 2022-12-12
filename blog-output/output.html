@@ -1950,7 +1950,7 @@ class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistratio
 </ol>
 </div>
 <div class="paragraph">
-<p>Compile the application and then wait a minute. Then run the application. You should see that the information about the compilation, which will have occcured a minute or more earlier, will be printed in the console.</p>
+<p>Compile the application and then wait a minute. Then run the application. You should see that the information about the compilation, which will have occured a minute or more earlier, will be printed in the console.</p>
 </div>
 <div class="paragraph">
 <p>You can see the output of what we&#8217;ve just done in the resulting generated Java code:</p>
@@ -1966,11 +1966,14 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670803100965L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670803398026L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
 </div>
+</div>
+<div class="paragraph">
+<p>Pretty tricky, eh? We&#8217;ve written code to write out more code and transform objects whose definitions we ultimately end into the GraalVM native image compiler.  It is kind of mind-bending, if you ask me.</p>
 </div>
 </div>
 </div>
@@ -1978,6 +1981,9 @@ public class CompilationEndpoint__CompilationEndpointFeature {
 <div class="sect1">
 <h2 id="_testing">Testing</h2>
 <div class="sectionbody">
+<div class="paragraph">
+<p>Indeed, all of this GraalVM AOT native image machinery is kind of mind-bending, to me, if I&#8217;m honest! In all that we&#8217;ve seen, I hope you feel that you know what to look at to identify and work around issues you discover. Being able to fix an issue is critical to success with a technology. But how do you ensure that it <em>stays</em> fixed going forward? This is where Spring&#8217;s rich testing support comes in. It too has been updated to work in a GraalVM native image context!</p>
+</div>
 <div class="paragraph">
 <p>testing is an incredibly important part of the story. The good news is, we&#8217;ve done a ton of work to make testing <strong>just work</strong> in a native image context. you can run a maven build or a Gradle build in native mode and you&#8217;ll get two output artifacts: one for tests, one for the production code. Fair warning tho! This&#8217;ll make the compilation take twice as long! That could be a few minutes.</p>
 </div>
@@ -2041,7 +2047,7 @@ class CustomerRepositoryTest {
 </div>
 </div>
 <div class="sect1">
-<h2 id="_a_note_on_compile_times">a note on compile times</h2>
+<h2 id="_a_note_on_compile_times">A Note on Compile Times</h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>You know. I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. it&#8217;s no wonder that it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. And it&#8217;s almost a curse that they&#8217;ve improved as much as they have, because the compile times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt, but slow enough that you feel like you&#8217;re being interrupted. Youre being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java and Go and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backwards. I kick off a compile and my mind wanders. i&#8217;ve been doing so many of these that now I&#8217;m starting to hear elevator music when I do a compile! Don&#8217;t you hear elevator music? So I filed an issue. I want everyone else to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official graalvm project and I asked. it seemed to resonate with people. one person even suggested which elevator music we should use. I love it! And, fabian nipehaus - of the official graalvm team at oracle, a PhD - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with a promising prototype. I love this prototype. He even had it print out some ASCII art so that people would have something to look at. i was sad, to say the least, to see that he didn&#8217;t think this would be accepted, if for no other reason than because of the copyrighted music. Dang! oh well. Hope <em>springs</em> eternal.</p>
@@ -2065,7 +2071,7 @@ class CustomerRepositoryTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-11 15:58:13 -0800
+Last updated 2022-12-11 16:03:12 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

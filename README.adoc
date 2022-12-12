@@ -57,7 +57,7 @@ I've also added a few dependencies. We won't touch on these dependencies in any 
 * Spring Data JDBC (`org.springframework.boot` : `spring-boot-starter-data-jdbc`)
 * H2 (`com.h2database` : `h2`)
 
-And of course, I've got a standard Spring Boot entry class.
+And, of course, I've got a standard Spring Boot entry class.
 
 [source,java]
 ----
@@ -266,34 +266,34 @@ Spring's AOT engine evaluates the `@Conditional` annotations at compile time. So
 
 == Application Migration
 
-So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, sometimes things don't work as expected. Sometimes, they don't work because one of the libraries on the classpath or indeed your code has done something to run afoul of the cases as mentioned earlier where you'll need to furnish configuration `.json` files.
+So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, sometimes, things don't work as expected because some code has done something to run afoul of the cases, as mentioned earlier, where you'll need to furnish configuration `.json` files.
 
 The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30 seconds or longer compile times and long reset cycles are involved!
 
-once you know what configuration your application will need, it's pretty straightforward to craft the hints using the Java API. The trouble is how do you figure out what hints are required? It can be tortuous to have an idea, make the change, then wait a minute (or more!) to find out if that worked and - if not - what the next error is. The reset cycle is what scares people. Mercifully, there are some pretty good ways to get a lot of this work done for you: running in AOT mode on the JRE, and running the GraalVM Java agent.
+once you know what configuration your application will need, it's pretty straightforward to craft the hints using the Java API. The trouble is, how do you figure out what hints are required? It can be tortuous to have an idea, make the change, then wait a minute (or more!) to find out if that worked and - if not - what the next error is. The reset cycle is what scares people. Mercifully, there are some pretty good ways to get a lot of this work done for you: running in AOT mode on the JRE, and running the GraalVM Java agent.
 
 === Run the AOT Code on the JRE
 
 The first thing you might do is run the code in AOT mode. If you think about it,   Spring Boot applications now have three different runtime destinations:
 
- * traditional Spring Boot running on the JRE. This is the default and works exactly as it always has. Do nothing different and you'll get this behavior.
- * code generated during the AOT phase of compilation, also run on the JRE
- * code generated during the AOT phase of compilation, running in a GraalVM native image.
+* traditional Spring Boot running on the JRE. This is the default and works exactly as it always has. Do nothing different, and you'll get this behavior.
+* code generated during the AOT phase of compilation, also run on the JRE
+* code generated during the AOT phase of compilation, running in a GraalVM native image.
 
 
 You get slightly more optimized performance when running AOT code on the JRE. You get considerably more performance when running the AOT code in a GraalVM native image.  That second option - running AOT code on the JRE - is awesome because it lets you preview what's going to get fed into the GraalVM native image compiler, and it is more performant than the traditional behavior.
 
 
-You can generate the AOT code, without doing a full GraalVM reset:
+You can generate the AOT code without doing a full GraalVM reset:
 
 [source,shell]
 ----
 mvn clean compile spring-boot:process-aot package
 ----
 
-This will transform your Spring application, and generate GraalVm native image hints, in the `target/spring-aot` directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the `target` directory) and to see what code was generated (under the `sources` directory).
+This will transform your Spring application and generate GraalVm native image hints in the `target/spring-aot` directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the `target` directory) and to see what code was generated (under the `sources` directory).
 
-There's a lot of interesting stuff happening here. The most important thing, from my perspective, is the class where  all the  `@Configuration` classes, from our codebase and from the library classpath, were rewritten to use functional configuration. It's generated code, and very long, so I will only excerpt some of it below:
+There's a lot of interesting stuff happening here. The most important thing, from my perspective, is the class where all the  `@Configuration` classes from our codebase and from the library classpath, were rewritten to use functional configuration. It's generated code and is very long, so I will only excerpt some of it below:
 
 [source,java]
 ----
@@ -302,9 +302,9 @@ include::{root}/target/spring-aot/main/sources/com/example/aot/AotApplication__B
 ...
 ----
 
-We'll dive more into what's happening here, later.
+We'll dive more into what's happening here later.
 
-You can  run the AOT optimized and generated code on the JRE by using the  `-DspringAot=true` switch. Thus:
+You can run the AOT optimized and generated code on the JRE using the  `-DspringAot=true` switch. Thus:
 
 [source,shell]
 ----
@@ -326,21 +326,21 @@ You can configure the Spring Boot build plugin to run with that property, too:
 </plugin>
 ----
 
-Then, run it in the usual way, but with AOT enabled by defualt:
+Then, run it in the usual way but with AOT enabled by default:
 
 [source,shell]
 ----
 mvn spring-boot:run
 ----
 
-The AOT mode is great because it's much faster than doing a full GraalVM native image compilation and run. You'll find that, because the AOT mode generates more efficient code that cuts out a lot of the extra `BeanDefinition`s that might otherwise hang around, the resulting application can be slightly more efficient even just running on the JRE.
+The AOT mode is great because it's much faster than a complete GraalVM native image compilation and run. In addition, you'll find that because the AOT mode generates more efficient code that cuts out a lot of the extra `BeanDefinition` instances that might otherwise hang around, the resulting application can be slightly more efficient even just running on the JRE.
 
-That said, running in the AOT mode is only  useful if you're trying to sift throught the generated files to confirm something is as it should be. It doens't help you if you don't yet know what should be in the first place. This part can be tricky, because - faced with a huge classpath full of libraries - it can de difficult to know what configuration is required  at all, let alonee what should be provided out of the box or what you'll have to provide.
+That said, running in the AOT mode is only useful if you're trying to sift through the generated files to confirm something is as it should be. It doesn't help you if you don't yet know what should be in the first place. This part can be tricky because it can be difficult to know what configuration is required at all, let alone what should be provided out of the box or what you'll have to provide.
 
 === Run the Java Agent
 
 
-You can run the program, and the agent alongside it, and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with `-Dagent=true` when running the app with maven (try `mvn spring-boot:run`). This will dump out config files in the `target/native/agent-output` directory. You can inspect those and then use those to tell you what could you'll need to contribute hints for. The Java agent dumps out _everything_, including some things that Spring's AOT engine will do automatically for you and thus you don't need to reproduce. I'd start with all the mentions of types across the various configuration files that are in the same packages as code in your application. That way you won't specify hints that Spring might've already done for you.
+You can run the program, and the agent alongside it, and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with `-Dagent=true` when running the app with maven (try `mvn spring-boot:run`). This will dump out config files in the `target/native/agent-output` directory. You can inspect those and then use those to tell you what could you'll need to contribute hints for. The Java agent dumps out _everything_, including some things that Spring's AOT engine will do automatically for you, and thus, you don't need to reproduce. I'd start with all the mentions of types across the various configuration files that are in the same packages as the code in your application. That way, you won't specify hints that Spring might've already done for you.
 
 Importantly: it'll also print out all the stuff that's random, and changes from one run to another. YOu can usually identify these as the classes with dollar signs in them or UUID-like names. Ignore those until the very end. They're probably not interesting.
 
@@ -368,25 +368,25 @@ Then run it thusly:
 ./mvnw -DskipTests clean package spring-boot:run
 ----
 
-Inspect the `target/native-image/` directory. You'll find that the Java agent has written out a `reflect-config.json` file that tells us something is going to reflect upon the `Person` type at runtime. We can also see that there is an entry for the `data.csv` file in the `resource-config.json` file.
+Inspect the `target/native-image/` directory. You'll find that the Java agent has written out a `reflect-config.json` file that tells us something will reflect upon the `Person` type at runtime. We can also see that there is an entry for the `data.csv` file in the `resource-config.json` file.
 
-It's important that you exhaust as many code paths as possible whiel running the Java agent. Perhaps you could run it while running your tests?  We want to make sure that you capture every scenario that may require configuration. Be sure to through all the `.json` configuration files and note every instance where one of the types we've created - like `Person` -  is present.
+It would be best to exhaust as many code paths as possible while running the Java agent. Perhaps you could run it while running your tests?  We want to make sure that you capture every scenario that may require configuration. Be sure to go through all the `.json` configuration files and note every instance where one of the types we've created - like `Person` -  is present.
 
-At this point, I'd disable the Java agent, commenting it out in the Maven `pom.xml`. It's served  its purpose for now. Move the `native-image` directory aside so it doesn't get deleted later. If you try to compile and run the application   as a GraalVM native image, and it fails, then you're going to want to consult these files.
+At this point, I'd disable the Java agent, commenting it out in the Maven `pom.xml`. It's served its purpose for now. Move the `native-image` directory aside, so it doesn't get deleted later. If you try to compile and run the application as a GraalVM native image, and it fails, then you're going to want to consult these files.
 
 
 === Soft-touch Refactorings to Enable AOT
 
-Let's look a bare bones example that could run afoul of GraalVM's native image compilation but for our interventions. Here's the completed program, complete with code to support the Spring AOT engine's work turning our application into a GraalVM native image:
+Let's look at a bare-bones example that could run afoul of GraalVM's native image compilation but for our interventions. Here's the completed program, complete with code to support the Spring AOT engine's work turning our application into a GraalVM native image:
 
 [source,java]
 ----
 include::{source}/com/example/aot/migrations/MigrationsConfiguration.java[]
 ----
 <1> this program simply reads in CSV data (in the least production-worthy  way possible!) and maps the rows into `Person` instances
-<2> we know that the Jackson JSON marshalling library is going to need to reflect on those `Person` instances, so we've used Spring's convenient `@RegisterReflectionForBinding` annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or `@Configuration` class.
+<2> we know that the Jackson JSON marshaling library will need to reflect on those `Person` instances, so we've used Spring's convenient `@RegisterReflectionForBinding` annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or `@Configuration` class.
 <3> we know that this program will need to read the `.csv` file from the `.jar`, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the `@ImportRuntimeHints` annotation to tell Spring to involve a class of type `RuntimeHintsRegistrar` in the compilation process so that we can programmatically contribute those hints.
-<4> we _could_, as an alternative to using the `@RegisterReflectionForBinding` annotation, have simply contributed a hint for reflective access for that type here, too.
+<4> we _could_, as an alternative to using the `@RegisterReflectionForBinding` annotation, have also contributed a hint for reflective access for that type.
 
 You'll need to create a file with sample data called `src/main/resources/data.csv`. Here's the one I put in the code:
 
@@ -397,27 +397,27 @@ include::{root}/src/main/resources/data.csv[]
 
 Run this on the JRE and it should just work. As expected.
 
-Now, for our example to work - or, rather, _not_ work, in a GraalVM native image, you'll need to comment out the lines where we use the `@RegisterReflectionForBinding` and `@ImportRuntimeHints` annotations. Then, run and compile the program. You should see  failures when you start it up as a GraalVM native image.
+Now, for our example to work - or, instead, _not_ work, in a GraalVM native image, you'll need to comment out the lines where we use the `@RegisterReflectionForBinding` and `@ImportRuntimeHints` annotations. Then, run and compile the program. You should see failures when you start it up as a GraalVM native image.
 
-The first error I got was related to being unable to load the `.csv` file. So, restore the `@ImportRuntimeHints` annotation. Compile and run that as a GraalVM native image. You'll get an error about serializing the `Person`. Restore the line with `@RegisterReflectionForBinding` and everything should work.
+The first error I got was related to being unable to load the `.csv` file. So, restore the `@ImportRuntimeHints` annotation. Compile and run that as a GraalVM native image. Next, you'll get an error about serializing the `Person`. Restore the line with `@RegisterReflectionForBinding`, and everything should work.
 
-Compile and run the program, and you should see the `Person` records printed on the console.
+Compile and run the program; you should see the `Person` records printed on the console.
 
-This program starts up and uses the Jackson JSON marshalling library  directly to print out JSON representations of some objects. This is a bit of a contrived example: when was the last time you used Jackson to print out some objecets and _that's all_?   If we had returned the `Person` type from a Spring `@Controller`, then Spring would automatically know to register hints for it. Spring would still need the hint for the `.csv` file, however.
+This program starts up and uses the Jackson JSON marshaling library directly to print out JSON representations of some objects. This is a bit of a contrived example: when was the last time you used Jackson to print out some objects, and _that's all_?   If we had returned the `Person` type from a Spring `@Controller`, then Spring would automatically know to register hints for it. Spring would still need the hint for the `.csv` file, however.
 
 == Processing the Bean Factory
 
-We've talked about the `BeanFactory`. It's basically a container, an aggregation, of all the beans in your application. In earlier sections, we saw that the beans in the `BeanFactory` are created as `BeanDefinition` instances. These `BeanDefinition`s are the metamodel representation of your object graph. They describe all the dependencies, constructors, annotations, fields, etc., related to your bean instances.
+We've talked about the `BeanFactory`. It's basically a container, an aggregation, of all the beans in your application. In earlier sections, we saw that the beans in the `BeanFactory` are created as `BeanDefinition` instances. These `BeanDefinition` instances are the metamodel representation of your object graph. They describe all the dependencies, constructors, annotations, fields, etc., related to your bean instances.
 
-Spring makes it trivial to act on that collection of `BeanDefinition` instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The `BeanFactoryPostProcessor` is a callback interface that lets us have access to the `BeanFactory` and to manipulate the `BeanDefinition` instances. We can register new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The `BeanFactory` is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrella project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot applications deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analyzing the `BeanFactory`, identifying infrastructure-related beans like `javax.sql.DataSource`, and then replacing them with a new bean of an identical interface, but with a connection pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a `DataSource` talking to an embedded H2 instance on your local machine, but when you deploy it, this `BeanFactoryPostProcessor` identifies connection strings in environment variables in the process space for the application and uses that to create a proper `DataSource` talking to that managed infrastructure, presumably on another host and port. And this was all transparent to the user, which is what we want.
+Spring makes it trivial to act on that collection of `BeanDefinition` instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The `BeanFactoryPostProcessor` is a callback interface that lets us have access to the `BeanFactory` and manipulate the `BeanDefinition` instances. We can register new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The `BeanFactory` is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrella project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot applications deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analyzing the `BeanFactory`, identifying infrastructure-related beans like `javax.sql.DataSource`, and then replacing them with a new bean of an identical interface, but with a connection that is pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a `DataSource` talking to an embedded H2 instance on your local machine, but when you deploy it, this `BeanFactoryPostProcessor` identifies connection strings in environment variables in the process space for the application and uses that to create a proper `DataSource` talking to that managed infrastructure, presumably on another host and port. And this was all transparent to the user, which is what we want.
 
 The `BeanFactoryPostProcessor` is a great place to see _everything_ in the `BeanFactory` all in one place when the application starts up.
 
-the `BeanFactoryInitializationAotProcessor` is a new interface that is sort of a peer t the `BeanFactoryPostProcessor`. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) while analyzing the `BeanDefinition`s in the application.
+The `BeanFactoryInitializationAotProcessor` is a new interface that is sort of a peer t the `BeanFactoryPostProcessor`. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) while analyzing the `BeanDefinition` instances in the application.
 
-It's important that you work only in terms of the `BeanDefinition` instances and bean names, in both these interfaces. Remember, at this point, Spring hasn't created any of the eans. So, while you'll be able to call `BeanFactory#getBean(String)`, it'll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don't do this - it'll really screw things up!
+It's important that you work only in terms of the `BeanDefinition` instances and bean names in both these interfaces. Remember, at this point, Spring hasn't created any of the eans. So, while you'll be able to call `BeanFactory#getBean(String)`, it'll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don't do this - it'll really screw things up!
 
-Let's look at a trivial example. We'll write a `BeanFactoryPostProcessor` that analyzes programmatically registers a new `BeanDefinition` in the application context. Would you ever nee to do this? No. but it's hopefully illustrative. We'll use a subclass of `BeanFactoryPostProcessor` called `BeanDefinitionRegistryPostProcessor`, which gives us a `BeanFactory` downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we'll register is going to require some reflection using the Jackson JSON API, so we'll need to also register a GraalVM hint for it using a `BeanFactoryInitializationAotProcessor` contribution.
+Let's look at a trivial example. We'll write a `BeanFactoryPostProcessor` that analyzes and programmatically registers a new `BeanDefinition` in the application context. Would you ever need to do this? No. but it's hopefully illustrative. We'll use a subclass of `BeanFactoryPostProcessor` called `BeanDefinitionRegistryPostProcessor`, which gives us a `BeanFactory` downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we'll register is going to require some reflection using the Jackson JSON API, so we'll need to also register a GraalVM hint for it using a `BeanFactoryInitializationAotProcessor` contribution.
 
 [source,java]
 ----
@@ -471,7 +471,7 @@ include::{source}/com/example/aot/bpp/proxies/ProxiesConfiguration.java[]
 
 In this example, we're using the cohesive design of Spring's AOT engine to transparently create proxies that _just work_. If we on the Spring team have done our job right, and you've written your code to leverage the right interfaces, then you can trust Spring to do the right thing for CGLIB proxies.
 
-Compile and run the application and you should see informatin logged when we invoke the method in the `ApplicationListener`.
+Compile and run the application and you should see information logged when we invoke the method in the `ApplicationListener`.
 
 === Code Generation
 
@@ -487,11 +487,11 @@ include::{source}/com/example/aot/bpp/code/CompilationEndpointConfiguration.java
 <2> we will post-process the bean at compile time using an implementation of a `BeanRegistrationAotProcessor`
 <3> as usual, we'll test things out when the application starts up.
 <4> Have you ever seen how to register a Spring Boot Actuator endpoint? Well, now you have. It's easy. Endpoints are supposed to be written in such a way that they could work agnostic to whichever rendering mechanism - HTTP, JMX, etc. - you might use. This endpoint exports some key-value pairs in a `Map<String, Object>` returned from the `compilation()` read operation. Note that we have _two_ constructors: one for the no-op case, and another for information about the build, like the time and directory of the compilation.
-<5> Like the `BeanPostProcessor`, `BeanRegistrationAotProcessor` implementations work on a bean-by-bean basis, getting a chance to inspect and change them. We again use the Java Poet abstraction to register new code, a method named `postProcessCompilationEndpoint`, which takes an instance of type `RegisteredBean` and another instance of type `CompilationEndpoint`. The `RegisteredBean` allows us to inspect the reflective metadata associated with the bean, and of course the `CompilationEndpoint` is the bean we created earlier. If the user doesnt use Spring's AOT engine, then the bean we looked at earlier is the only bean they'll ever get. If they do use the AOT engine, however, then this method will return a _new_ `CompilationEndpoint`, initialized with values during compilation.
+<5> Like the `BeanPostProcessor`, `BeanRegistrationAotProcessor` implementations work on a bean-by-bean basis, getting a chance to inspect and change them. We again use the Java Poet abstraction to register new code, a method named `postProcessCompilationEndpoint`, which takes an instance of type `RegisteredBean` and another instance of type `CompilationEndpoint`. The `RegisteredBean` allows us to inspect the reflective metadata associated with the bean, and of course the `CompilationEndpoint` is the bean we created earlier. If the user doesn't use Spring's AOT engine, then the bean we looked at earlier is the only bean they'll ever get. If they do use the AOT engine, however, then this method will return a _new_ `CompilationEndpoint`, initialized with values during compilation.
 <6> the key bit starts here: we use Java Poet to create a new instance of `CompilationEndpoint` with real values initialized and captured during the AOT phase itself. Now _that's_ meta!
 
 
-Compile the application and then wait a minute. Then run the application. You should see that the information about the compilation, which will have occured a minute or more earlier, will be printed in the console.
+Compile the application and then wait a minute. Then run the application. You should see that the information about the compilation, which will have occurred a minute or more earlier, will be printed in the console.
 
 You can see the output of what we've just done in the resulting generated Java code:
 

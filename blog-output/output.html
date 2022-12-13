@@ -485,7 +485,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div class="sect2">
 <h3 id="_bean_creation">Bean Creation</h3>
 <div class="paragraph">
-<p>Spring will take all the <code>BeanDefinition</code> instances and create actual, live-fire beans. Spring will call constructors, invoke lifecycle methods, etc. After this phase, you&#8217;ll have an application ready to serve production traffic. This is <em>good</em> &#8482;. We like production, don&#8217;t we?</p>
+<p>Spring will take all the <code>BeanDefinition</code> instances and create actual, live-fire beans. Spring will call constructors, invoke lifecycle methods, etc. After this phase, you&#8217;ll have an application ready to serve production traffic. Being production-worthy is <em>good</em> &#8482;. We like production, don&#8217;t we?</p>
 </div>
 <div class="paragraph">
 <p>Spring Boot 3 introduces a new phase, at compile time, to support AOT.</p>
@@ -502,7 +502,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <h2 id="_enter_graalvm">Enter GraalVm</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p><a href="https://www.graalvm.org/">GraalVM</a> is a drop-in replacement for OpenJDK. It <em>is</em> OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra features, but let&#8217;s focus on the <code>native-image</code> compiler. Henceforth, when I say "GraalVM," I specifically refer to the <code>native-image</code> compiler.</p>
+<p><a href="https://www.graalvm.org/">GraalVM</a> is a drop-in replacement for OpenJDK. It <em>is</em> OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra features, but let&#8217;s focus on the <code>native-image</code> compiler. Henceforth, when I say "GraalVM," I refer to the <code>native-image</code> compiler.</p>
 </div>
 </div>
 </div>
@@ -560,7 +560,7 @@ public class AotApplication {
 <p>I won&#8217;t add anything to this class. Instead, as we introduce new concepts, I&#8217;ll create new <code>@Configuration</code>-annotated classes in sub-packages. We won&#8217;t revisit this class.</p>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s look at our first example of the new AOT engine in practice. This trivial and fairly typical application works with a database and surfaces an HTTP endpoint like any other trivial Spring Boot application. But, of course, you have seen this before.</p>
+<p>In practice, let&#8217;s look at our first example of the new AOT engine. This trivial and fairly typical application works with a database and surfaces an HTTP endpoint like any other trivial Spring Boot application. But, of course, you have seen this before.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -688,7 +688,7 @@ echo "${PID}: ${RSS}M"</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Run the application, and you should see all the output from the previous examples, as expected. The best part? It&#8217;ll have started in no time and be a far sight smaller as a binary and a process occupying RAM. You can use the <code>rss.sh</code> script we introduced to measure the process' RSS.</p>
+<p>Run the application, and you should see all the output from the previous examples, as expected. The best part? It&#8217;ll have started in no time and be far smaller than a binary and a process occupying RAM. You can use the <code>rss.sh</code> script we introduced to measure the process' RSS.</p>
 </div>
 </div>
 <div class="sect2">
@@ -887,7 +887,7 @@ class Cat implements Animal {
 </ul>
 </div>
 <div class="paragraph">
-<p>This mechanism is pluggable, too, so implementors may also provide their scopes. Spring does this across the portfolio in projects like Spring Web Flow and Spring Batch. You&#8217;ll also see it in third-party projects like the Flowable workflow engine.</p>
+<p>This mechanism is pluggable, so implementors may also provide their scopes. Spring does this across the portfolio in projects like Spring Web Flow and Spring Batch. You&#8217;ll also see it in third-party projects like the Flowable workflow engine.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1181,13 +1181,13 @@ class DetectionConfiguration {
 <h2 id="_application_migration">Application Migration</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>So far, everything works well out of the box. It is our goal that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, sometimes, things don&#8217;t work as expected because some code has done something to run afoul of the cases, as mentioned earlier, where you&#8217;ll need to furnish configuration <code>.json</code> files.</p>
+<p>So far, everything works well out of the box. Our goal is that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, sometimes, things don&#8217;t work as expected because some code has done something to run afoul of the cases, as mentioned earlier, where you&#8217;ll need to furnish configuration <code>.json</code> files.</p>
 </div>
 <div class="paragraph">
 <p>The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30 seconds or longer compile times and long reset cycles are involved!</p>
 </div>
 <div class="paragraph">
-<p>Once you know what configuration your application will need, it&#8217;s pretty straightforward to craft the hints using the Java API. The trouble is, how do you figure out what hints are required? It can be tortuous to have an idea, make the change, then wait a minute (or more!) to find out if that worked and - if not - what the next error is. The reset cycle is what scares people. Mercifully, there are some pretty good ways to get a lot of this work done for you: running in AOT mode on the JRE and running the GraalVM Java agent.</p>
+<p>Once you know what configuration your application will need, it&#8217;s pretty straightforward to craft the hints using the Java API. The trouble is, how do you figure out what hints are required? It can be tortuous to have an idea, make the change, then wait a minute (or more!) to find out if that worked and - if not - what the next error is. The reset cycle is what scares people. Mercifully, there are some pretty good ways to get a lot of this work done for you: running in AOT mode on the JRE and the GraalVM Java agent.</p>
 </div>
 <div class="sect2">
 <h3 id="_run_the_aot_code_on_the_jre">Run the AOT Code on the JRE</h3>
@@ -1197,7 +1197,7 @@ class DetectionConfiguration {
 <div class="ulist">
 <ul>
 <li>
-<p>traditional Spring Boot running on the JRE. This is the default and works exactly as it always has. Do nothing different, and you&#8217;ll get this behavior.</p>
+<p>traditional Spring Boot running on the JRE. This mode is the default and works exactly as it always has. Do nothing different, and you&#8217;ll get this mode.</p>
 </li>
 <li>
 <p>code generated during the AOT phase of compilation, also run on the JRE</p>
@@ -1208,7 +1208,7 @@ class DetectionConfiguration {
 </ul>
 </div>
 <div class="paragraph">
-<p>You get slightly more optimized performance when running AOT code on the JRE. You get considerably more performance when running the AOT code in a GraalVM native image.  That second option - running AOT code on the JRE - is awesome because it lets you preview what&#8217;s going to get fed into the GraalVM native image compiler, and it is more performant than the traditional behavior.</p>
+<p>You get slightly more optimized performance when running AOT code on the JRE. Your application will perform considerably better when running the AOT code in a GraalVM native image.  That second option - running AOT code on the JRE - is also interesting because it lets you preview what will get fed into the GraalVM native image compiler, which is more performant than the traditional behavior.</p>
 </div>
 <div class="paragraph">
 <p>You can generate the AOT code without doing a full GraalVM reset:</p>
@@ -1219,10 +1219,10 @@ class DetectionConfiguration {
 </div>
 </div>
 <div class="paragraph">
-<p>This will transform your Spring application and generate GraalVm native image hints in the <code>target/spring-aot</code> directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the <code>target</code> directory) and to see what code was generated (under the <code>sources</code> directory).</p>
+<p>This command transforms your Spring application and generates GraalVM native image hints in the <code>target/spring-aot</code> directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the <code>target</code> directory) and what code was generated (under the <code>sources</code> directory).</p>
 </div>
 <div class="paragraph">
-<p>There&#8217;s a lot of interesting stuff happening here. The most important thing, from my perspective, is the class where all the  <code>@Configuration</code> classes from our codebase and from the library classpath were rewritten to use functional configuration. It&#8217;s generated code and is very long, so I will only excerpt some of it below:</p>
+<p>There&#8217;s a lot of interesting stuff happening here. The most important thing, from my perspective, is <code>AotApplication__BeanFactoryRegistrations.java</code>, in which all the  <code>@Configuration</code>-annotated classes from the codebase appear transpiled into functional bean registrations. These functional bean registrations skip all the ingest and yield a <code>BeanFactory</code> that looks like it would have had we run the normal code.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1272,10 +1272,10 @@ public class AotApplication__BeanFactoryRegistrations {
 </div>
 </div>
 <div class="paragraph">
-<p>We&#8217;ll dive more into what&#8217;s happening here later.</p>
+<p>There is more to discuss here, but that&#8217;ll have to wait.</p>
 </div>
 <div class="paragraph">
-<p>You can run the AOT optimized and generated code on the JRE using the  <code>-DspringAot=true</code> switch. Thus:</p>
+<p>You can run the AOT-optimized and generated code on the JRE using the  <code>-DspringAot=true</code> switch. Thus:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1283,7 +1283,7 @@ public class AotApplication__BeanFactoryRegistrations {
 </div>
 </div>
 <div class="paragraph">
-<p>You can configure the Spring Boot build plugin to run with that property, too:</p>
+<p>You can configure the Spring Boot build plugin to run with that switch active by default, too:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1299,7 +1299,7 @@ public class AotApplication__BeanFactoryRegistrations {
 </div>
 </div>
 <div class="paragraph">
-<p>Then, run it in the usual way but with AOT enabled by default:</p>
+<p>Run it in the usual way:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1310,16 +1310,16 @@ public class AotApplication__BeanFactoryRegistrations {
 <p>The AOT mode is great because it&#8217;s much faster than a complete GraalVM native image compilation and run. In addition, you&#8217;ll find that because the AOT mode generates more efficient code that cuts out a lot of the extra <code>BeanDefinition</code> instances that might otherwise hang around, the resulting application can be slightly more efficient even just running on the JRE.</p>
 </div>
 <div class="paragraph">
-<p>That said, running in the AOT mode is only useful if you&#8217;re trying to sift through the generated files to confirm something is as it should be. It doesn&#8217;t help you if you don&#8217;t yet know what should be in the first place. This part can be tricky because it can be difficult to know what configuration is required at all, let alone what should be provided out of the box or what you&#8217;ll have to provide.</p>
+<p>That said, running in the AOT mode is only useful if you&#8217;re trying to sift through the generated files to confirm something is as it should be. It doesn&#8217;t help you if you don&#8217;t yet know what should be in the first place. This part can be tricky because it can be difficult to know what configuration is required.</p>
 </div>
 </div>
 <div class="sect2">
 <h3 id="_run_the_java_agent">Run the Java Agent</h3>
 <div class="paragraph">
-<p>You can run the program, and the agent alongside it, and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with <code>-Dagent=true</code> when running the app with maven (try <code>mvn spring-boot:run</code>). This will dump out config files in the <code>target/native/agent-output</code> directory. You can inspect those and then use those to tell you what could you&#8217;ll need to contribute hints for. The Java agent dumps out <em>everything</em>, including some things that Spring&#8217;s AOT engine will do automatically for you, and thus, you don&#8217;t need to reproduce. I&#8217;d start with all the mentions of types across the various configuration files that are in the same packages as the code in your application. That way, you won&#8217;t specify hints that Spring might&#8217;ve already done for you.</p>
+<p>You can run the program and the agent alongside it and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with <code>-Dagent=true</code> when running the app with maven (try <code>mvn spring-boot:run</code>). The agent dumps config files in the <code>target/native/agent-output</code> directory. You can inspect those and then use those to tell you what you&#8217;ll need to contribute hints for. The Java agent dumps out <em>everything</em>, including some things that Spring&#8217;s AOT engine will do automatically for you, and thus, you don&#8217;t need to reproduce. I&#8217;d start with all the mentions of types across the various configuration files in the same packages as the code in your application. That way, you won&#8217;t specify hints that Spring might&#8217;ve already done for you.</p>
 </div>
 <div class="paragraph">
-<p>Importantly: it&#8217;ll also print out all the stuff that&#8217;s random, and changes from one run to another. YOu can usually identify these as the classes with dollar signs in them or UUID-like names. Ignore those until the very end. They&#8217;re probably not interesting.</p>
+<p>Importantly: the program also prints out all the random stuff and changes from one run to another. YOu can usually identify these as the classes with dollar signs in them or UUID-like names. Ignore those until the very end. They&#8217;re probably not interesting.</p>
 </div>
 <div class="paragraph">
 <p>Configure the Spring Boot Maven build plugin to contribute a JVM argument:</p>
@@ -1347,13 +1347,13 @@ public class AotApplication__BeanFactoryRegistrations {
 </div>
 </div>
 <div class="paragraph">
-<p>Inspect the <code>target/native-image/</code> directory. You&#8217;ll find that the Java agent has written out a <code>reflect-config.json</code> file that tells us something will reflect upon the <code>Person</code> type at runtime. We can also see that there is an entry for the <code>data.csv</code> file in the <code>resource-config.json</code> file.</p>
+<p>Inspect the <code>target/native-image/</code> directory. You&#8217;ll find that the Java agent has written out a <code>reflect-config.json</code> file that tells us something will reflect upon the <code>Person</code> type at runtime. We can also see an entry for the <code>data.csv</code> file in the <code>resource-config.json</code> file.</p>
 </div>
 <div class="paragraph">
-<p>It would be best to exhaust as many code paths as possible while running the Java agent. Perhaps you could run it while running your tests?  We want to make sure that you capture every scenario that may require configuration. Be sure to go through all the <code>.json</code> configuration files and note every instance where one of the types we&#8217;ve created - like <code>Person</code> -  is present.</p>
+<p>It would be best to exhaust as many code paths as possible while running the Java agent. Perhaps you could run it while running your tests?  We want to ensure that you capture every scenario that may require configuration. Be sure to go through all the <code>.json</code> configuration files and note every instance where one of the types we&#8217;ve created - like <code>Person</code> -  is present.</p>
 </div>
 <div class="paragraph">
-<p>At this point, I&#8217;d disable the Java agent, commenting it out in the Maven <code>pom.xml</code>. It&#8217;s served its purpose for now. Move the <code>native-image</code> directory aside, so it doesn&#8217;t get deleted later. If you try to compile and run the application as a GraalVM native image, and it fails, then you&#8217;re going to want to consult these files.</p>
+<p>At this point, I&#8217;d disable the Java agent, commenting it out in the Maven <code>pom.xml</code>. It&#8217;s served its purpose for now. Move the <code>native-image</code> directory aside, so it doesn&#8217;t get deleted later. If you try to compile and run the application as a GraalVM native image and fail, you will want to consult these files.</p>
 </div>
 </div>
 <div class="sect2">
@@ -1437,7 +1437,7 @@ class MigrationsConfiguration {
 <p>we know that the Jackson JSON marshaling library will need to reflect on those <code>Person</code> instances, so we&#8217;ve used Spring&#8217;s convenient <code>@RegisterReflectionForBinding</code> annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or <code>@Configuration</code> class.</p>
 </li>
 <li>
-<p>we know that this program will need to read the <code>.csv</code> file from the <code>.jar</code>, which is a resource. This will be a problem for GraalVm unless we contribute some hints. We use the <code>@ImportRuntimeHints</code> annotation to tell Spring to involve a class of type <code>RuntimeHintsRegistrar</code> in the compilation process so that we can programmatically contribute those hints.</p>
+<p>we know that this program will need to read the <code>.csv</code> file from the <code>.jar</code>, a resource, which will be a problem for GraalVm unless we contribute some hints. We use the <code>@ImportRuntimeHints</code> annotation to tell Spring to involve a class of type <code>RuntimeHintsRegistrar</code> in the compilation process so that we can programmatically contribute those hints.</p>
 </li>
 <li>
 <p>we <em>could</em>, as an alternative to using the <code>@RegisterReflectionForBinding</code> annotation, have also contributed a hint for reflective access for that type.</p>
@@ -1462,7 +1462,7 @@ class MigrationsConfiguration {
 </div>
 </div>
 <div class="paragraph">
-<p>Run this on the JRE and it should just work. As expected.</p>
+<p>Run this on the JRE, and it should just work. As expected.</p>
 </div>
 <div class="paragraph">
 <p>Now, for our example to work - or, instead, <em>not</em> work, in a GraalVM native image, you&#8217;ll need to comment out the lines where we use the <code>@RegisterReflectionForBinding</code> and <code>@ImportRuntimeHints</code> annotations. Then, run and compile the program. You should see failures when you start it up as a GraalVM native image.</p>
@@ -1474,7 +1474,10 @@ class MigrationsConfiguration {
 <p>Compile and run the program; you should see the <code>Person</code> records printed on the console.</p>
 </div>
 <div class="paragraph">
-<p>This program starts up and uses the Jackson JSON marshaling library directly to print out JSON representations of some objects. This is a bit of a contrived example: when was the last time you used Jackson to print out some objects, and <em>that&#8217;s all</em>?   If we had returned the <code>Person</code> type from a Spring <code>@Controller</code>, then Spring would automatically know to register hints for it. Spring would still need the hint for the <code>.csv</code> file, however.</p>
+<p>This program uses the Jackson JSON marshaling library directly to print out JSON representations of some objects. This example is a bit contrived: when was the last time you used Jackson to print out some objects, and <em>that&#8217;s all</em>? It seldom happens.  If this program had a controller that returned the <code>Person</code>, Spring would automatically know to register hints for it. There are a lot of common cases like this where Spring will <em>just work</em>.</p>
+</div>
+<div class="paragraph">
+<p>Spring will still need a custom hint for the <code>.csv</code> file.</p>
 </div>
 </div>
 </div>
@@ -1483,22 +1486,22 @@ class MigrationsConfiguration {
 <h2 id="_processing_the_bean_factory">Processing the Bean Factory</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>We&#8217;ve talked about the <code>BeanFactory</code>. It&#8217;s basically a container, an aggregation, of all the beans in your application. In earlier sections, we saw that the beans in the <code>BeanFactory</code> are created as <code>BeanDefinition</code> instances. These <code>BeanDefinition</code> instances are the metamodel representation of your object graph. They describe all the dependencies, constructors, annotations, fields, etc., related to your bean instances.</p>
+<p>Spring makes it trivial to act on a collection of  <code>BeanDefinition</code> instances through callback interfaces evaluated at compile time (AOT) and runtime (JRE). For example, the <code>BeanFactoryPostProcessor</code> is a callback interface that lets us access the <code>BeanFactory</code> and manipulate the <code>BeanDefinition</code> instances. We can register new ones, update existing ones, or even remove them in this interface and other, more specific subclasses of this interface.</p>
 </div>
 <div class="paragraph">
-<p>Spring makes it trivial to act on that collection of <code>BeanDefinition</code> instances through callback interfaces that are evaluated at compile time (AOT) and runtime (JRE). The <code>BeanFactoryPostProcessor</code> is a callback interface that lets us have access to the <code>BeanFactory</code> and manipulate the <code>BeanDefinition</code> instances. We can register new ones, update existing ones, or even remove them in this interface and in other, more specific subclasses of this interface. The <code>BeanFactory</code> is not fixed at this point. Various Spring projects use this fact to great effect. Before we turned the Spring Cloud project into an umbrella project that included a ton of different libraries to make working with microservices easier, its sole function was to make it easy for Spring Boot applications deployed to a Platform-as-a-Service (PaaS) like Cloud Foundry or Heroku to connect to managed infrastructure like a database or a message queue. It did this by analyzing the <code>BeanFactory</code>, identifying infrastructure-related beans like <code>javax.sql.DataSource</code>, and then replacing them with a new bean of an identical interface, but with a connection that is pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a <code>DataSource</code> talking to an embedded H2 instance on your local machine, but when you deploy it, this <code>BeanFactoryPostProcessor</code> identifies connection strings in environment variables in the process space for the application and uses that to create a proper <code>DataSource</code> talking to that managed infrastructure, presumably on another host and port. And this was all transparent to the user, which is what we want.</p>
+<p>The <code>BeanFactory</code> is mutable at this point. Various Spring projects use this fact to great effect. Before the Spring team turned the Spring Cloud project into the microservices sensation it is today; its sole function was to make it easy for Spring Boot applications deployed to a Platform-as-a-Service (PaaS) (like Cloud Foundry or Heroku) to connect to managed infrastructure like a database or a message queue. It did this by analyzing the <code>BeanFactory</code>, identifying infrastructure-related beans like <code>javax.sql.DataSource</code>, and then replacing them with a new bean of an identical interface, but with a connection that is pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a <code>DataSource</code> talking to an embedded H2 instance on your local machine. Still, when you deploy it, this <code>BeanFactoryPostProcessor</code> identifies connection strings in environment variables in the process space for the application and uses that to create a proper <code>DataSource</code> pointing to managed infrastructure, presumably on another host and port. This process was transparent to the user, thanks to the magic of <code>BeanFactoryPostProcessor</code> implementations.</p>
 </div>
 <div class="paragraph">
 <p>The <code>BeanFactoryPostProcessor</code> is a great place to see <em>everything</em> in the <code>BeanFactory</code> all in one place when the application starts up.</p>
 </div>
 <div class="paragraph">
-<p>The <code>BeanFactoryInitializationAotProcessor</code> is a new interface that is sort of a peer t the <code>BeanFactoryPostProcessor</code>. It runs at compile time, and you have basically the same contract: you can choose to contribute hints (or even do code-generation) while analyzing the <code>BeanDefinition</code> instances in the application.</p>
+<p>The <code>BeanFactoryInitializationAotProcessor</code> is a new interface that is a peer to the <code>BeanFactoryPostProcessor</code>. It runs at compile time, and you have the same contract: you can contribute hints (or even do code-generation) while analyzing the <code>BeanDefinition</code> instances in the application.</p>
 </div>
 <div class="paragraph">
-<p>It&#8217;s important that you work only in terms of the <code>BeanDefinition</code> instances and bean names in both these interfaces. Remember, at this point, Spring hasn&#8217;t created any of the eans. So, while you&#8217;ll be able to call <code>BeanFactory#getBean(String)</code>, it&#8217;ll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don&#8217;t do this - it&#8217;ll really screw things up!</p>
+<p>You must work only in terms of the <code>BeanDefinition</code> instances and bean names in both these interfaces. Remember, Spring hasn&#8217;t created any of the beans at this point. So, while you&#8217;ll be able to call <code>BeanFactory#getBean(String)</code>, it&#8217;ll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don&#8217;t do this - it&#8217;ll screw things up!</p>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s look at a trivial example. We&#8217;ll write a <code>BeanFactoryPostProcessor</code> that analyzes and programmatically registers a new <code>BeanDefinition</code> in the application context. Would you ever need to do this? No. But it&#8217;s hopefully illustrative. We&#8217;ll use a subclass of <code>BeanFactoryPostProcessor</code> called <code>BeanDefinitionRegistryPostProcessor</code>, which gives us a <code>BeanFactory</code> downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we&#8217;ll register is going to require some reflection using the Jackson JSON API, so we&#8217;ll need to also register a GraalVM hint for it using a <code>BeanFactoryInitializationAotProcessor</code> contribution.</p>
+<p>Let&#8217;s look at a trivial example. We&#8217;ll write a <code>BeanFactoryPostProcessor</code> that analyzes and programmatically registers a new <code>BeanDefinition</code> in the application context. Would you ever need to do this? No. But it&#8217;s hopefully illustrative. We&#8217;ll use a subclass of <code>BeanFactoryPostProcessor</code> called <code>BeanDefinitionRegistryPostProcessor</code>, which gives us a <code>BeanFactory</code> downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we&#8217;ll register will require some reflection using the Jackson JSON API, so we&#8217;ll need to also register a GraalVM hint for it using a <code>BeanFactoryInitializationAotProcessor</code> contribution.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1602,24 +1605,24 @@ class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitia
 <div class="colist arabic">
 <ol>
 <li>
-<p>we were going to work with the same bean both at compile time and at runtime. So, I&#8217;ve stashed a variable with the name of the bean here for access from both interfaces at both phases</p>
+<p>we were going to work with the same bean at compile time and runtime. Here, we create a variable with the name of the bean for subsequent access from both interface implementations at both phases (AOT and runtime)</p>
 </li>
 <li>
-<p>Note that the bean definitions here are registered with the <code>static</code> keyword. Spring will involve these beans very early in the lifecycle of the application context. It won&#8217;t have any live-fire beans except for these very early beans. So, we use <code>static</code> to avoid depending on anything from the <code>BeanFactory</code>. And don&#8217;t force Spring to construct the <code>@Configuration</code> class containing the <code>@Bean</code> registration methods, too.</p>
+<p>Note that we use the <code>static</code> keyword with both bean definition registrations. Spring will involve these beans very early in the lifecycle of the <code>BeanFactory</code>. There will not be any live-fire beans. So,  use <code>static</code> to avoid weird lifecycle issues. Avoid depending on anything from the <code>BeanFactory</code>. Don&#8217;t force Spring to construct the <code>@Configuration</code> class containing the <code>@Bean</code> registration methods, too.</p>
 </li>
 <li>
-<p>the <code>Listener</code> is a trivia <code>ApplicationListener</code> that, when run, will iterate over a collection of dummy DTOs and print them out using Jackson for JSON serialization. This serialization involves reflection, for which we&#8217;ll need to furnish hints.</p>
+<p>the <code>Listener</code> class is a trivia <code>ApplicationListener</code> that, when run, will iterate over a collection of dummy DTOs and print them out using Jackson for JSON serialization. This serialization involves reflection, for which we&#8217;ll need to furnish hints.</p>
 </li>
 <li>
-<p>the first callback, the <code>ListenerBeanFactoryPostProcessor</code>, programmatically registers a new <code>BeanDefinition</code> of type <code>Listener</code> if a bean of the name we&#8217;ve specified in the variable doesn&#8217;t already exist in the context. This object runs at runtime in both the JRE and the AOT application. Here were changing, molding, the <code>BeanFactory</code>.</p>
+<p>the first callback, the <code>ListenerBeanFactoryPostProcessor</code>, programmatically registers a new <code>BeanDefinition</code> of type <code>Listener</code> if a bean of the name we&#8217;ve specified in the variable doesn&#8217;t already exist in the context. This object runs at runtime in both the JRE and the AOT application. Here we mutate the <code>BeanFactory</code>.</p>
 </li>
 <li>
-<p>when we compile the application using the AOT engine, intending to build a graalvm native image, Spring Boot will also run the the <code>ListenerBeeanFactoryInitializationAotProcessor</code>, which - knowing that we&#8217;ll eventually register a <code>Listener</code> bean - furnishes the requisite hints to make the JSON serialization of the <code>Product</code> records work.</p>
+<p>Spring&#8217;s AOT engine will involve the <code>ListenerBeanFactoryInitializationAotProcessor</code> during the compilation phase so that it may furnish hints to make the JSON serialization of the <code>Product</code> records work.</p>
 </li>
 </ol>
 </div>
 <div class="paragraph">
-<p>These two interfaces work well together. They complement each other. The <code>BeanFactory</code> is the lowest level at which I&#8217;d write code. I don&#8217;t want to write code in terms of the <code>BeanFactory</code> if I can avoid it. It is, as I said, the primordial ooze of your running application. It&#8217;s the suggestion, the insinuation, the allusion to a valid working application. But it&#8217;s not a working application. That comes after those <code>BeanDefinition</code> instances are turned into valid objects. That comes next.</p>
+<p>These two interfaces work well together. They complement each other. The <code>BeanFactory</code> is the lowest level against which I&#8217;d write code when manipulating the Spring application context. I don&#8217;t want to write code in terms of the <code>BeanFactory</code> if I can avoid it. The <code>BeanFactory</code> suggests a  valid working application. But it&#8217;s not a working application. Spring must first turn the <code>BeanDefinition</code> instances into valid objects, or <em>beans</em>. That part comes next.</p>
 </div>
 </div>
 </div>
@@ -1627,19 +1630,19 @@ class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitia
 <h2 id="_processing_beans">Processing Beans</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>If the <code>BeanFactory</code> is too meta (no, not <em>that</em> Meta!) for you, then you can still do interesting things at the next rung in the abstraction ladder, working with beans directly, both before they&#8217;ve been initialized and after they&#8217;ve been initialized.</p>
+<p>Suppose the <code>BeanFactory</code> is too meta (no, not <em>that</em> Meta!) for you. In that case, you can still do interesting things at the next rung in the abstraction ladder, working with beans directly, both before initialization and after.</p>
 </div>
 <div class="paragraph">
-<p>Working on a bean-by-bean basis can be very powerful. If you want to work with actual, live-fire beans, you can use Spring&#8217;s <code>BeanPostProcessor</code>. This interface puts you in a position to act on, to transform, objects before they&#8217;re finally live and handling logic. This is great for infrastructure code, such as frameworks, where you need to note or retain or observe references to objects of a given shape. What shape? Well, anything, really! Objects that have a certain marker interface. Objects that have a certain annotation. Whatever you want, and whatever you could decide given reflection methods.  Let&#8217;s look at an example that creates proxies for objects with an annotation, <code>@Logged</code>, logging out any method invocations on those beans.</p>
+<p>Working on a bean-by-bean basis can be very powerful. If you want to work with actual, live-fire beans, you can use Spring&#8217;s <code>BeanPostProcessor</code>. This interface puts you in a position to act on and transform objects before they&#8217;re finally live and handling logic. <code>BeanPostProcessor</code> instances are great for infrastructure code, such as frameworks, where you need to note, retain, or observe references to objects of a given shape. What shape? Well, anything! Objects that have a certain marker interface. Objects that have a certain annotation. Whatever you want and whatever you could discover, given reflection.  Let&#8217;s look at an example that creates proxies for beans with an annotation, <code>@Logged</code>, logging out any method invocations.</p>
 </div>
 <div class="paragraph">
-<p>I implement this proxy with Spring&#8217;s <code>ProxyFactory</code>, which makes it trivial to use the <em>proxy</em> design pattern. A proxy, in its most general form, is a class functioning as an interface to something else. Spring uses proxies to handle things like declarative transaction management, auditing, security, logging, concurrency, etc. there is a great way to <em>decorate</em> an existing object with cross-cutting concerns, like starting and committing a transaction before and after a method invocation. Spring uses them all over the place for things like <code>@Transactional</code>, <code>@Scheduled</code>, <code>@Async</code>, <code>@Authorized</code>, and countless more.</p>
+<p>I implement this proxy with Spring&#8217;s <code>ProxyFactory</code>, which makes it trivial to use the <em>proxy</em> design pattern. In its most general form, a proxy is a class functioning as an interface to something else. Spring uses proxies to handle declarative transaction management, auditing, security, logging, concurrency, etc. there is a great way to <em>decorate</em> an existing object with cross-cutting concerns, like starting and committing a transaction before and after a method invocation. Spring uses them all over the place for things like <code>@Transactional</code>, <code>@Scheduled</code>, <code>@Async</code>, <code>@Authorized</code>, and countless more.</p>
 </div>
 <div class="paragraph">
 <p>There are two types of proxies: CGLIB and JDK. Proxies make it trivial to create an object that implements an interface type of your choice and then forwards the actual work to a concrete instance of your choice.  JDK proxies are built with Java&#8217;s <a href="https://www.baeldung.com/java-dynamic-proxies"><code>InvocationHandler</code></a>.  In the case of JDK proxies, the word <code>interface</code>  used in the description above is quite literally a Java <code>interface</code> type.</p>
 </div>
 <div class="paragraph">
-<p>But what if the contract of the surface area, the <em>interface</em> of your class, isn&#8217;t a Java interface? What if it&#8217;s a concrete class for which it makes little sense to extract out a separate Java interface? JDK proxies require an interface, and they were the only thing supported in Spring until Spring Framework 1.1.</p>
+<p>But what if the contract of the surface area, the <em>interface</em> of your class, isn&#8217;t a Java interface? What if it&#8217;s a concrete class for which it makes little sense to extract a separate Java interface? JDK proxies require an interface, and they were the only thing supported in Spring until Spring Framework 1.1.</p>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -1648,7 +1651,7 @@ class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitia
 <div class="title">Note</div>
 </td>
 <td class="content">
-I can&#8217;t be sure, but I suspect this is one of the reasons so much of the early literature for Spring Framework suggests using interfaces with Spring beans and why you&#8217;d see things like <code>FooService</code> and <code>DefaultFooService</code> or <code>FooService</code> and <code>FooServiceImpl</code> or whatever. Nowadays, that&#8217;s an anti-pattern and highly discouraged, <em>unless</em> you actually plan to have more than one implementation of <code>FooService</code>. Avoid the knee-jerk reaction to create an interface for an object that has the same shape as the object. It only complicates things.
+I can&#8217;t be sure, but I suspect this is one of the reasons so much of the early literature for Spring Framework suggests using interfaces with Spring beans and why you&#8217;d see things like <code>FooService</code> and <code>DefaultFooService</code> or <code>FooService</code> and <code>FooServiceImpl</code> or whatever. Nowadays, that&#8217;s an anti-pattern and highly discouraged, <em>unless</em> you plan to have more than one implementation of <code>FooService</code>. Avoid the knee-jerk reaction to create an interface for an object that has the same shape as the object. It only complicates things.
 </td>
 </tr>
 </table>
@@ -1668,7 +1671,7 @@ I can&#8217;t be sure, but I suspect this is one of the reasons so much of the e
 <p>Mercifully, Spring can do a lot of this for us. Let&#8217;s take a look at an example.</p>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s look at a simple proxy example of the logs information whenever somebody invokes a method annotated called <code>@Logged</code>, which we&#8217;ll create. The annotation is nice because it&#8217;s decorative. We&#8217;re layering capabilities onto this method, without complicating the implementation of the business logic.</p>
+<p>Let&#8217;s look at a simple proxy example of the logs information whenever somebody invokes a method annotated called <code>@Logged</code>, which we&#8217;ll create. The annotation is nice because it&#8217;s decorative. We&#8217;re layering capabilities onto this method without complicating the business logic implementation.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1782,22 +1785,22 @@ class OrderService {
 <p>as usual, we&#8217;ll try things out when the application starts up</p>
 </li>
 <li>
-<p>we&#8217;re going to create this proxy in a subclass of <code>BeanPostProcessor</code> called <code>SmartInstantiationAwareBeanPostProcessor</code>. Spring&#8217;s AOT engine invokes the <code>SmartInstantiationAwareBeanPostProcessor#determineBeanType</code> to determine what type the bean should be. Spring&#8217;s AOT engine uses that information to determine what proxies to build. When the application starts up completely, Spring will also invoke <code>SmartInstantiationAwareBeanPostProcessor#postProcessAfterInitialization(Object bean, String beanName)</code>, giving you a chance to inspect a given bean and -</p>
+<p>we&#8217;re going to create this proxy in a subclass of <code>BeanPostProcessor</code> called <code>SmartInstantiationAwareBeanPostProcessor</code>. Spring&#8217;s AOT engine invokes the <code>SmartInstantiationAwareBeanPostProcessor#determineBeanType</code> to determine what the bean should be. Spring&#8217;s AOT engine uses that information to determine what proxies to build. When the application starts up completely, Spring will also invoke <code>SmartInstantiationAwareBeanPostProcessor#postProcessAfterInitialization(Object bean, String beanName)</code>, giving you a chance to inspect a given bean and -</p>
 </li>
 <li>
-<p>we need to both build a proxy and determine the resulting class of that proxy at various phases in the lifecycle of the <code>SmartInstantiationAwareBeanPostProcessor</code>. So, we&#8217;ll return the builder, an instance of <code>ProxyFactory</code>, and either uses it to determine the expected proxy&#8217;s class type, or use it to actually create the final proxy object.</p>
+<p>we need to both build a proxy and determine the resulting class of that proxy at various phases in the lifecycle of the <code>SmartInstantiationAwareBeanPostProcessor</code>. So, we&#8217;ll return the builder, an instance of <code>ProxyFactory</code>, and we&#8217;ll either use it to determine the expected proxy&#8217;s class type or create the final proxy object.</p>
 </li>
 <li>
 <p>setting <code>proxyTargetClass</code> to <code>true</code> and specifying a <code>targetClass</code> results in a CGLIB proxy. Otherwise, the expectation is that you&#8217;re only proxying interfaces.</p>
 </li>
 <li>
-<p><code>BeanPostProcessor</code> implementations visit every bean in the <code>BeanFactory</code>, so we must take care to only act on those with the annotation present. This logic is encoded in this <code>matches</code> method, which looks for all types annotated with or types with methods annotated with the <code>@Logged</code> annotation.</p>
+<p><code>BeanPostProcessor</code> implementations visit every bean in the <code>BeanFactory</code>, so we must only act on those with the annotation present. The <code>matches</code> method encodes this logic that looks for all types annotated with, or with methods annotated with, the <code>@Logged</code> annotation.</p>
 </li>
 <li>
-<p>the <code>SmartInstantiationAwareBeanPostProcessor#determineBeanType</code> method does almost all the work of creating a proxy but stops short of actually creating the proxy. We&#8217;re only interested in knowing what the class would be <em>if</em> we did create a proxy. This then gets fed into the AOT engine.</p>
+<p>the <code>SmartInstantiationAwareBeanPostProcessor#determineBeanType</code> method does almost all the work of creating a proxy but stops short of actually creating the proxy. We&#8217;re only interested in knowing what the class would be <em>if</em> we did create a proxy. This information then gets fed into the AOT engine.</p>
 </li>
 <li>
-<p>here&#8217;s where the rubber meets the road, and Spring actually creates a CGLIB proxy at runtime. This works just fine, as Spring&#8217;s already registered the requisite hints with GraalVM during compilation.</p>
+<p>here&#8217;s where the rubber meets the road, and Spring creates a CGLIB proxy at runtime. The proxy creation works fine, as Spring will have already registered the requisite hints with GraalVM during compilation.</p>
 </li>
 </ol>
 </div>
@@ -1814,7 +1817,7 @@ class OrderService {
 <p>Suppose you&#8217;re using a library, and it is using <code>InvocationHandler</code>, outside of Spring&#8217;s purview. You&#8217;ll need to furnish the appropriate hints for GraalVM knows what to do there. You might also have stuff you want to do at runtime that requires upfront, compile-time processing. Code generation is one of the most powerful dimensions of Spring&#8217;s AOT engine. We use it all over the place in Spring Framework 6!  You can both furnish configuration and generate code at compile with implementations of the AOT equivalent to <code>BeanPostProcessor</code>, the  <code>BeanRegistrationAotProcessor</code>.</p>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s look at a simple example. This time we&#8217;ll revisit the code generation but go even further. We&#8217;re going to register a brand new bean during compilation, overwriting one that&#8217;s already present, so that we can capture compile-time information and put it in the endpoint. This Actuator endpoint, the <code>CompilationEndpoint</code> is suitably trivial as to be understandable in a quick introduction like this one. This new <code>CompilationEndpoint</code> will capture information about the ambient state of the build <em>at compile-time</em>, like the time and directory in which the code was compiled.</p>
+<p>Let&#8217;s look at a simple example. This time we&#8217;ll revisit the code generation but go even further. We&#8217;re going to register a brand new bean during compilation, overwriting one that&#8217;s already present, so that we can capture compile-time information and put it in the endpoint. This Actuator endpoint, the <code>CompilationEndpoint</code> is suitably trivial as to be understandable in a quick introduction like this one. This new <code>CompilationEndpoint</code> will capture information about the ambient state of the build <em>at compile-time</em>, like the time and directory in which the code is compiled.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1935,13 +1938,13 @@ class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistratio
 <p>we will post-process the bean at compile time using an implementation of a <code>BeanRegistrationAotProcessor</code></p>
 </li>
 <li>
-<p>as usual, we&#8217;ll test things out when the application starts up.</p>
+<p>as usual, we&#8217;ll test things out when the application starts.</p>
 </li>
 <li>
-<p>Have you ever seen how to register a Spring Boot Actuator endpoint? Well, now you have. It&#8217;s easy. Endpoints are supposed to be written in such a way that they could work agnostic to whichever rendering mechanism - HTTP, JMX, etc. - you might use. This endpoint exports some key-value pairs in a <code>Map&lt;String, Object&gt;</code> returned from the <code>compilation()</code> read operation. Note that we have <em>two</em> constructors: one for the no-op case, and another for information about the build, like the time and directory of the compilation.</p>
+<p>Have you ever seen how to register a Spring Boot Actuator endpoint? Well, now you have. It&#8217;s easy. Actuator Endpoints should be agnostic of whichever rendering mechanism - HTTP, JMX, etc. - you might use. This endpoint exports key-value pairs in a <code>Map&lt;String, Object&gt;</code> returned from the <code>compilation()</code> read operation. Note that we have <em>two</em> constructors: one for the no-op case and another for information about the build, like the time and directory of the compilation.</p>
 </li>
 <li>
-<p>Like the <code>BeanPostProcessor</code>, <code>BeanRegistrationAotProcessor</code> implementations work on a bean-by-bean basis, getting a chance to inspect and change them. We again use the Java Poet abstraction to register new code, a method named <code>postProcessCompilationEndpoint</code>, which takes an instance of type <code>RegisteredBean</code> and another instance of type <code>CompilationEndpoint</code>. The <code>RegisteredBean</code> allows us to inspect the reflective metadata associated with the bean, and of course, the <code>CompilationEndpoint</code> is the bean we created earlier. If the user doesn&#8217;t use Spring&#8217;s AOT engine, then the bean we looked at earlier is the only bean they&#8217;ll ever get. If they do use the AOT engine, however, then this method will return a <em>new</em> <code>CompilationEndpoint</code>, initialized with values during compilation.</p>
+<p>Like the <code>BeanPostProcessor</code>, <code>BeanRegistrationAotProcessor</code> implementations work on a bean-by-bean basis, getting a chance to inspect and change them. We again use the Java Poet abstraction to register new code, a method named <code>postProcessCompilationEndpoint</code>, which takes an instance of type <code>RegisteredBean</code> and another instance of type <code>CompilationEndpoint</code>. The <code>RegisteredBean</code> allows us to inspect the reflective metadata associated with the bean, and of course, the <code>CompilationEndpoint</code> is the bean we created earlier. If the user doesn&#8217;t use Spring&#8217;s AOT engine, then the bean we looked at earlier is the only bean they&#8217;ll ever get. However, if they use the AOT engine, this method will return a <em>new</em> <code>CompilationEndpoint</code>, initialized with values during compilation.</p>
 </li>
 <li>
 <p>the key bit starts here: we use Java Poet to create a new instance of <code>CompilationEndpoint</code> with real values initialized and captured during the AOT phase itself. Now <em>that&#8217;s</em> meta!</p>
@@ -1965,7 +1968,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670887587843L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670955267086L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -1981,7 +1984,7 @@ public class CompilationEndpoint__CompilationEndpointFeature {
 <h2 id="_testing">Testing</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Indeed, <em>all</em> of this GraalVM AOT native image machinery is kind of mind-bending to me, if I&#8217;m honest! In all that we&#8217;ve seen, I hope you feel that you know what to look at to identify and work around issues you discover. Being able to fix an issue is critical to success with technology. But how do you ensure that it <em>stays</em> fixed going forward? This is where Spring&#8217;s rich testing support comes in. It, too, has been updated to work in a GraalVM native image context!</p>
+<p>Indeed, <em>all</em> of this GraalVM AOT native image machinery is kind of mind-bending to me, if I&#8217;m honest! But, in all that we&#8217;ve seen, I hope you feel that you know what to look at to identify and work around issues you discover. Of course, fixing an issue is critical to success with technology. But how do you ensure that it <em>stays</em> fixed going forward? Here is where Spring&#8217;s rich testing support comes in. It, too, has been updated to work in a GraalVM native image context!</p>
 </div>
 <div class="paragraph">
 <p>Testing is an incredibly important part of the story. The good news is we&#8217;ve done a ton of work to make testing <strong>just work</strong> in a native image context.</p>
@@ -1995,7 +1998,7 @@ public class CompilationEndpoint__CompilationEndpointFeature {
 </div>
 </div>
 <div class="paragraph">
-<p>You&#8217;ll get two output artifacts: one for tests and one for the production code. Fair warning tho! Producing the test code as a native image effectively doubles the already interminable compile time! That could be a few minutes. When the compilation finishes, there&#8217;ll be a binary in the <code>target</code> directory called <code>native-tests</code>. Run that to execute the test code as a native image.</p>
+<p>You&#8217;ll get two output artifacts: one for tests and another for the production code. Fair warning tho! Producing the test code as a native image doubles the interminable compile time! That could be a few minutes. When the compilation finishes, there&#8217;ll be a binary in the <code>target</code> directory called <code>native-tests</code>. Run that to execute the test code as a native image.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -2029,15 +2032,15 @@ class CustomerRepositoryTest {
 <div class="colist arabic">
 <ol>
 <li>
-<p>we are creating a Spring <code>ApplicationContext</code> and then using it to inject references to beans, like the <code>CustomerRepository</code> we created when we looked at AOT fundamentals much earlier on.</p>
+<p>we are creating a Spring <code>ApplicationContext</code> and then using it to inject references to beans, like the <code>CustomerRepository</code> we created when we looked at AOT fundamentals earlier.</p>
 </li>
 </ol>
 </div>
 <div class="paragraph">
-<p>The basics work here. There are some exceptions; you may encounter issues with Mockito and the like. But the basics work. Try it out!</p>
+<p>The basics work here. There are some exceptions; you may encounter issues with Mockito. But the basics work. Try it out!</p>
 </div>
 <div class="paragraph">
-<p>It&#8217;s good that the basics work, too. Does it mean that we can run the usual test harness against our business logic and confirm to whatever extent we&#8217;d like that things work as they did before. but what about the new code designed to support turning your application into a GraalVM native image? What about the hints that you register for a given type using the Spring AOT engine? Spring has you covered. You can use the new <code>RuntimeHintsPredicates</code> type to confirm that the hints you&#8217;ve designed are working as expected.</p>
+<p>It&#8217;s good that the basics work, too. So does it mean that we can run the usual test harness against our business logic and confirm to whatever extent we&#8217;d like that things work as they did before. but what about the new code designed to support turning your application into a GraalVM native image? What about the hints you register for a given type using the Spring AOT engine? Spring has you covered. You can use the new <code>RuntimeHintsPredicates</code> type to confirm that your hints are working as expected.</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -2088,10 +2091,10 @@ class MigrationsConfigurationTest {
 <h2 id="_a_note_on_compile_times">A Note on Compile Times</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. It&#8217;s no wonder that it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous <a href="https://xkcd.com/303/">XKCD "compiling" cartoon</a>.</p>
+<p>You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. So it&#8217;s no wonder it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous <a href="https://xkcd.com/303/">XKCD "compiling" cartoon</a>.</p>
 </div>
 <div class="paragraph">
-<p>And it&#8217;s almost a curse that they&#8217;ve improved as much as they have because the compilation times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you&#8217;re being interrupted. You&#8217;re being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have mercifully quick compilation times. In this one sense, it feels like graalvm has taken us a step backward. I kick off a compilation, and my mind wanders. I&#8217;ve been doing so many of these that now I&#8217;m starting to hear elevator music when I  compile! Don&#8217;t you hear elevator music? <a href="https://github.com/oracle/graal/issues/5327">So I filed an issue</a>. I want everyone <em>else</em> to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official GraalVM project and I asked. it seemed to <a href="https://github.com/oracle/graal/issues/5327#issue-1429805241">resonate with people</a>. One person even made a suggestion as to <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1297108398">which elevator music</a> should be played (one of the soundtracks from the Bond film <a href="https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg"><em>Goldeneye</em></a>, natch). I love it! And, <a href="https://github.com/fniephaus">Fabio Niephaus</a> - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with <em>a promising prototype</em>.</p>
+<p>And it&#8217;s almost a curse that they&#8217;ve improved as much as they have because the compilation times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you&#8217;re being interrupted. You&#8217;re being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have quick compilation times. In this one sense, it feels like graalvm has taken us a step backward. I kick off a compilation, and my mind wanders. I&#8217;ve been doing so many of these that I&#8217;m starting to hear elevator music when I  compile! Don&#8217;t you hear elevator music? <a href="https://github.com/oracle/graal/issues/5327">So I filed an issue</a>. I want everyone <em>else</em> to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official GraalVM project, and I asked. it seemed to <a href="https://github.com/oracle/graal/issues/5327#issue-1429805241">resonate with people</a>. One person even suggested as to <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1297108398">which elevator music</a> should be played (one of the soundtracks from the Bond film <a href="https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg"><em>Goldeneye</em></a>, natch). I love it! And, <a href="https://github.com/fniephaus">Fabio Niephaus</a> - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with <em>a promising prototype</em>.</p>
 </div>
 <div class="imageblock">
 <div class="content">
@@ -2099,7 +2102,7 @@ class MigrationsConfigurationTest {
 </div>
 </div>
 <div class="paragraph">
-<p>To say that I love this prototype would be an understatement!  I was sad, of course, to see that he didn&#8217;t think this would be accepted, if for no other reason than because of the copyrighted music. Dang! Oh well. Hope <em>springs</em> eternal.</p>
+<p>To say that I love this prototype would be an understatement!  I was sad to see that he didn&#8217;t think it would be merged, if for no other reason than because of the copyrighted music. Dang! Oh well. Hope <em>springs</em> eternal.</p>
 </div>
 <div class="paragraph">
 <p>But, something good <em>did</em> come of this: there are some interesting ideas <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1308971081">discussed</a> around how to have a bell chime (or indeed any other sound played) when the compilation finishes. At least this way, you&#8217;d never feel like you wasted precious time if you stepped away for a minute!</p>
@@ -2110,23 +2113,23 @@ class MigrationsConfigurationTest {
 <h2 id="_conclusion">Conclusion</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>We&#8217;ve come a long way! When I started covering Spring Native (the predecessor to what would eventually become Spring Framework 6&#8217;s AOT engine) in 2020, a build took <em>10 minutes</em> and only worked for the smallest and most specific of scenarios. Now, here we are in 2022, and I can all but effortlessly get a Spring app working in a GraalVM native image context in less than a minute.</p>
+<p>We&#8217;ve come a long way! When I started covering Spring Native (the predecessor to what would eventually become Spring Framework 6&#8217;s AOT engine) in 2020, a build took <em>10 minutes</em> and only worked for the smallest and most specific scenarios. Now, here we are in 2022, and I can all but effortlessly get a Spring app working in a GraalVM native image context in less than a minute.</p>
 </div>
 <div class="paragraph">
-<p>The performance and memory usage implications are hard to ignore, and I think the inertia required to make a move to AOT will become easier and easier to obtain in the next days, weeks, months, and years as the community embraces Spring&#8217;s newfound AOT support. I hope this video makes it easier for everyone, application and framework developers alike, to leverage Spring Boot 3 and Spring Framework 6. Obviously, you won&#8217;t be starved for examples if you need guidance in implementing this stuff in your own code. Just look for pointers to types like <code>RuntimeHintsRegistrar</code>, <code>BeanRegistrationAotProcessor</code>, and <code>BeanFactoryInitializationAotProcessor</code> in the Spring Boot codebase! And those don&#8217;t even begin to cover the implementations provided by the projects themselves, like Spring Security, Spring Data, Spring Cloud, Spring Shell, Spring Integration, and Spring Batch. We&#8217;ve only just begun to scratch the surface here, my friends. And so, too, has the community. That said, things are moving <em>quickly</em>: As I write this, there&#8217;s already work nearly- or already- completed for various opensource projects like Axon, Vaadin, Hilla Framework, MyBatis, JHipster, the official Kubernetes Java client, JobRunr, so many others besides.</p>
+<p>The performance and memory usage implications are hard to ignore. As the community embraces Spring&#8217;s newfound AOT support, I think the inertia required to move to AOT will become easier and easier to obtain in the next days, weeks, months, and years. I hope this video makes it easier for application and framework developers to leverage Spring Boot 3 and Spring Framework 6. You won&#8217;t be starved for examples if you need guidance in implementing this in your code. Look for pointers to types like <code>RuntimeHintsRegistrar</code>, <code>BeanRegistrationAotProcessor</code>, and <code>BeanFactoryInitializationAotProcessor</code> in the Spring Boot codebase! And those don&#8217;t even begin to cover the projects' implementations, like Spring Security, Spring Data, Spring Cloud, Spring Shell, Spring Integration, and Spring Batch. We&#8217;ve only just begun to scratch the surface here, my friends. And so, too, has the community. That said, things are moving <em>quickly</em>: As I write this, there&#8217;s already work nearly- or already- completed for various opensource projects like Axon, Vaadin, Hilla Framework, MyBatis, JHipster, the official Kubernetes Java client, JobRunr, so many others besides.</p>
 </div>
 <div class="paragraph">
-<p>GraalVM native image technology could be a <em>very</em> powerful way to build applications better suited for production. This saves costs and helps you build more reliable systems. Spring&#8217;s AOT engine helps you introduce new possibilities, like serverless, embedded, and infrastructure, for which Spring may not have been considered ideal in the past.</p>
+<p>GraalVM native image technology could be a <em>very</em> powerful way to build applications better suited for production. GraalVM native images save costs and help you build more reliable systems. In addition, Spring&#8217;s AOT engine helps you introduce new possibilities, like serverless, embedded, and infrastructure, for which Spring may not have been considered ideal in the past.</p>
 </div>
 <div class="paragraph">
-<p>I hope this humble text has helped you get started, and that you&#8217;re able to go to the Spring Initialzr and generate your next value-producing, production-bound Spring Boot application with GraalVM native image support!</p>
+<p>I hope this humble text has helped you get started and that you can go to the <a href="https://start.spring.io">Spring Initialzr</a> and generate your next value-producing, production-bound Spring Boot application with GraalVM native image support!</p>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-11 23:22:49 -0800
+Last updated 2022-12-13 10:14:20 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

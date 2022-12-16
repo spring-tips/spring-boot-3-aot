@@ -5,6 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="generator" content="Asciidoctor 2.0.18">
+<meta name="author" content="Josh Long">
 <title>Everything You Never Wanted to Know About Spring Boot 3 AOT</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
 <style>
@@ -440,6 +441,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <body class="article">
 <div id="header">
 <h1>Everything You Never Wanted to Know About Spring Boot 3 AOT</h1>
+<div class="details">
+<span id="author" class="author">Josh Long</span><br>
+</div>
 </div>
 <div id="content">
 <div id="preamble">
@@ -492,14 +496,14 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="images/bean-evolution.gif" alt="bean evolution">
+<img src="images/bean-evolution.png" alt="bean evolution">
 </div>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_enter_graalvm">Enter GraalVm</h2>
+<h2 id="_enter_graalvm">Enter GraalVM</h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p><a href="https://www.graalvm.org/">GraalVM</a> is a drop-in replacement for OpenJDK. It <em>is</em> OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra features, but let&#8217;s focus on the <code>native-image</code> compiler. Henceforth, when I say "GraalVM," I refer to the <code>native-image</code> compiler.</p>
@@ -1070,7 +1074,7 @@ class PlayStore implements MobileMarketplace {
 <h3 id="_configuration_properties">Configuration Properties</h3>
 <div class="imageblock">
 <div class="content">
-<img src="images/environment.gif" alt="environment">
+<img src="images/environment.png" alt="environment">
 </div>
 </div>
 <div class="paragraph">
@@ -1437,7 +1441,7 @@ class MigrationsConfiguration {
 <p>we know that the Jackson JSON marshaling library will need to reflect on those <code>Person</code> instances, so we&#8217;ve used Spring&#8217;s convenient <code>@RegisterReflectionForBinding</code> annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or <code>@Configuration</code> class.</p>
 </li>
 <li>
-<p>we know that this program will need to read the <code>.csv</code> file from the <code>.jar</code>, a resource, which will be a problem for GraalVm unless we contribute some hints. We use the <code>@ImportRuntimeHints</code> annotation to tell Spring to involve a class of type <code>RuntimeHintsRegistrar</code> in the compilation process so that we can programmatically contribute those hints.</p>
+<p>we know that this program will need to read the <code>.csv</code> file from the <code>.jar</code>, a resource, which will be a problem for GraalVM unless we contribute some hints. We use the <code>@ImportRuntimeHints</code> annotation to tell Spring to involve a class of type <code>RuntimeHintsRegistrar</code> in the compilation process so that we can programmatically contribute those hints.</p>
 </li>
 <li>
 <p>we <em>could</em>, as an alternative to using the <code>@RegisterReflectionForBinding</code> annotation, have also contributed a hint for reflective access for that type.</p>
@@ -1968,7 +1972,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1670955267086L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671163253822L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -2091,10 +2095,10 @@ class MigrationsConfigurationTest {
 <h2 id="_a_note_on_compile_times">A Note on Compile Times</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVm does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. So it&#8217;s no wonder it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous <a href="https://xkcd.com/303/">XKCD "compiling" cartoon</a>.</p>
+<p>You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <em>why</em> it&#8217;s happening. It&#8217;s not hard to understand. GraalVM does a <em>lot</em> of work - doing a full analysis of our code and all the code on the classpath. So it&#8217;s no wonder it takes as much memory and time as it does. And it has already improved <em>dramatically</em> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous <a href="https://xkcd.com/303/">XKCD "compiling" cartoon</a>.</p>
 </div>
 <div class="paragraph">
-<p>And it&#8217;s almost a curse that they&#8217;ve improved as much as they have because the compilation times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you&#8217;re being interrupted. You&#8217;re being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have quick compilation times. In this one sense, it feels like graalvm has taken us a step backward. I kick off a compilation, and my mind wanders. I&#8217;ve been doing so many of these that I&#8217;m starting to hear elevator music when I  compile! Don&#8217;t you hear elevator music? <a href="https://github.com/oracle/graal/issues/5327">So I filed an issue</a>. I want everyone <em>else</em> to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official GraalVM project, and I asked. it seemed to <a href="https://github.com/oracle/graal/issues/5327#issue-1429805241">resonate with people</a>. One person even suggested as to <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1297108398">which elevator music</a> should be played (one of the soundtracks from the Bond film <a href="https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg"><em>Goldeneye</em></a>, natch). I love it! And, <a href="https://github.com/fniephaus">Fabio Niephaus</a> - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with <em>a promising prototype</em>.</p>
+<p>And it&#8217;s almost a curse that they&#8217;ve improved as much as they have because the compilation times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you&#8217;re being interrupted. You&#8217;re being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have quick compilation times. In this one sense, it feels like GraalVM has taken us a step backward. I kick off a compilation, and my mind wanders. I&#8217;ve been doing so many of these that I&#8217;m starting to hear elevator music when I  compile! Don&#8217;t you hear elevator music? <a href="https://github.com/oracle/graal/issues/5327">So I filed an issue</a>. I want everyone <em>else</em> to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official GraalVM project, and I asked. it seemed to <a href="https://github.com/oracle/graal/issues/5327#issue-1429805241">resonate with people</a>. One person even suggested as to <a href="https://github.com/oracle/graal/issues/5327#issuecomment-1297108398">which elevator music</a> should be played (one of the soundtracks from the Bond film <a href="https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg"><em>Goldeneye</em></a>, natch). I love it! And, <a href="https://github.com/fniephaus">Fabio Niephaus</a> - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with <em>a promising prototype</em>.</p>
 </div>
 <div class="imageblock">
 <div class="content">
@@ -2129,7 +2133,7 @@ class MigrationsConfigurationTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-13 10:14:20 -0800
+Last updated 2022-12-15 20:00:39 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

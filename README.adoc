@@ -1,6 +1,7 @@
 :root: .
 :source: ./src/main/java
 :source-highlighter: highlight.js
+:author: Josh Long
 
 
 
@@ -35,9 +36,9 @@ Spring will take all the `BeanDefinition` instances and create actual, live-fire
 
 Spring Boot 3 introduces a new phase, at compile time, to support AOT.
 
-image::images/bean-evolution.gif[]
+image::images/bean-evolution.png[]
 
-== Enter GraalVm
+== Enter GraalVM
 
 https://www.graalvm.org/[GraalVM] is a drop-in replacement for OpenJDK. It _is_ OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra features, but let's focus on the `native-image` compiler. Henceforth, when I say "GraalVM," I refer to the `native-image` compiler.
 
@@ -224,7 +225,7 @@ Compile and run the code to the correct instances printed out.
 
 === Configuration Properties
 
-image::images/environment.gif[]
+image::images/environment.png[]
 
 Spring Framework provides the `Environment` abstraction, mapping between a `String` key and a `String` value. In addition, there is a strategy interface (`PropertyResolver`) for resolving these properties. Spring Boot can then take values in the `Environment` and map them to objects via setters or their constructors. Here's an example:
 
@@ -385,7 +386,7 @@ include::{source}/com/example/aot/migrations/MigrationsConfiguration.java[]
 ----
 <1> this program simply reads in CSV data (in the least production-worthy  way possible!) and maps the rows into `Person` instances
 <2> we know that the Jackson JSON marshaling library will need to reflect on those `Person` instances, so we've used Spring's convenient `@RegisterReflectionForBinding` annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or `@Configuration` class.
-<3> we know that this program will need to read the `.csv` file from the `.jar`, a resource, which will be a problem for GraalVm unless we contribute some hints. We use the `@ImportRuntimeHints` annotation to tell Spring to involve a class of type `RuntimeHintsRegistrar` in the compilation process so that we can programmatically contribute those hints.
+<3> we know that this program will need to read the `.csv` file from the `.jar`, a resource, which will be a problem for GraalVM unless we contribute some hints. We use the `@ImportRuntimeHints` annotation to tell Spring to involve a class of type `RuntimeHintsRegistrar` in the compilation process so that we can programmatically contribute those hints.
 <4> we _could_, as an alternative to using the `@RegisterReflectionForBinding` annotation, have also contributed a hint for reflective access for that type.
 
 You'll need to create a file with sample data called `src/main/resources/data.csv`. Here's the one I put in the code:
@@ -542,9 +543,9 @@ The testing support in Spring is exhaustive, and the Spring Boot even more so. I
 
 == A Note on Compile Times
 
-You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get _why_ it's happening. It's not hard to understand. GraalVm does a _lot_ of work - doing a full analysis of our code and all the code on the classpath. So it's no wonder it takes as much memory and time as it does. And it has already improved _dramatically_ even since I first started using it in earnest less than three years ago. It's a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous https://xkcd.com/303/[XKCD "compiling" cartoon].
+You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get _why_ it's happening. It's not hard to understand. GraalVM does a _lot_ of work - doing a full analysis of our code and all the code on the classpath. So it's no wonder it takes as much memory and time as it does. And it has already improved _dramatically_ even since I first started using it in earnest less than three years ago. It's a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous https://xkcd.com/303/[XKCD "compiling" cartoon].
 
-And it's almost a curse that they've improved as much as they have because the compilation times are now fast enough that you don't have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you're being interrupted. You're being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have quick compilation times. In this one sense, it feels like graalvm has taken us a step backward. I kick off a compilation, and my mind wanders. I've been doing so many of these that I'm starting to hear elevator music when I  compile! Don't you hear elevator music? https://github.com/oracle/graal/issues/5327[So I filed an issue]. I want everyone _else_ to hear elevator music, too. So I asked. It doesn't hurt to ask. I went to the official GraalVM project, and I asked. it seemed to https://github.com/oracle/graal/issues/5327#issue-1429805241[resonate with people]. One person even suggested as to https://github.com/oracle/graal/issues/5327#issuecomment-1297108398[which elevator music] should be played (one of the soundtracks from the Bond film https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg[_Goldeneye_], natch). I love it! And, https://github.com/fniephaus[Fabio Niephaus] - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with _a promising prototype_.
+And it's almost a curse that they've improved as much as they have because the compilation times are now fast enough that you don't have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you're being interrupted. You're being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have quick compilation times. In this one sense, it feels like GraalVM has taken us a step backward. I kick off a compilation, and my mind wanders. I've been doing so many of these that I'm starting to hear elevator music when I  compile! Don't you hear elevator music? https://github.com/oracle/graal/issues/5327[So I filed an issue]. I want everyone _else_ to hear elevator music, too. So I asked. It doesn't hurt to ask. I went to the official GraalVM project, and I asked. it seemed to https://github.com/oracle/graal/issues/5327#issue-1429805241[resonate with people]. One person even suggested as to https://github.com/oracle/graal/issues/5327#issuecomment-1297108398[which elevator music] should be played (one of the soundtracks from the Bond film https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg[_Goldeneye_], natch). I love it! And, https://github.com/fniephaus[Fabio Niephaus] - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with _a promising prototype_.
 
 image::{root}/images/joshlong-mode.png[]
 

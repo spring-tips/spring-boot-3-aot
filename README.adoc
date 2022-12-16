@@ -26,6 +26,7 @@ I find it helpful to understand where we were to appreciate where we are now. Tr
 The Spring application starts up and reads in all the configuration sources. Remember: Spring Framework is a dependency management framework. It needs to know how your various objects are constructed, their lifecycles (constructors, `InitializingBean#afterPropertiesSet`,`@PostConstruct`, `DisposableBean#destroy`, `@PreDestroy`), etc. So it reads the various configuration files from all the `@Configuration`-annotated classes in your application through component scanning, where Spring discovers classes annotated with `@Component`. This component scanning also discovers classes annotated with annotations that have the `@Component` annotation on them, like `@Service`, `@Repository`, @Controller`, and `@RestController`. It also reads in configuration from Spring's classic XML configuration format. (I don't use the XML format and haven't seen it in the wild in over half a decade, but _still_...).
 
 === `BeanFactory` creation of `BeanDefinition`  instances
+
 At this point, Spring turns all the various inputs into a metamodel representation of your objects, a `BeanFactory` full of `BeanDefinition` instances. These `BeanDefinition` instances describe the objects, wiring, and more. They represent the constructors, annotations, properties to be injected, setters, etc.  The `BeanDefinition` instances describe everything required to describe an object and get to a valid state so that it may be given to other objects and generally start doing work.
 
 Notably, at this phase, there are no live-fire beans. Nothing is opening ports and sockets, doing disk IO, etc. This phase in the `BeanFactory` does not involve any business logic.
@@ -85,7 +86,7 @@ include::{root}/src/main/resources/schema.sql[]
 
 Run the main class in your IDE or on the command line in the usual ways:
 
-[source,java]
+[source,shell]
 ----
 mvn -DskipTests spring-boot:run
 ----
@@ -160,7 +161,10 @@ This example listens for two unrelated events. Although there is no significance
 
 These are just a few of the events that Spring and Spring Boot emit as part of the lifecycle of an application. There are other events for all sorts of stuff, including Spring Security authentication, Actuator, Spring lifecycle, and more.
 
-=== A Reusable Recipe for Object Creation
+=== FactoryBeans: A Reusable Recipe for Object Creation
+
+
+image::{root}/images/factorybean.png[]
 
 Sometimes objects require finessing and customization. Sometimes, creating an object becomes more complicated than just a simple constructor. Therefore, isolating this construction logic in a single place is helpful because it is reusable. There are at least two patterns that describe this sort of parameterized construction beside a constructor:
 
@@ -177,6 +181,35 @@ include::{source}/com/example/aot/factorybeans/FactoryBeansConfiguration.java[]
 -----
 <1> the `AnimalFactoryBean` produces an object of type `Animal`. But which? It depends on the parameters fed into the `FactoryBean`.
 <2> the client code injects the `Animal`, ignorant of the construction logic.
+
+=== XML Configuration
+
+Now, I know you didn't ask, but just in case you were wondering: Spring's new AOT engine works well enough with classic XML application configuration. We talked about XML configuration when we introduced the idea that Spring _ingests_, or reads in, configuration from various sources, one of which is XML files.
+
+image::{root}/images/xml.png[]
+
+Let's look, ever so quickly, at an example. First, the XML configuration file:
+
+
+[source,xml]
+-----
+include::{source}/../resources/app.xml[]
+-----
+<1> this `<bean/>` element defines a bean of type `MessageProducer`
+<2> this `<bean/>` element defines a bean of type `XmlLoggingApplicationListener`, which in turn injects an instance of type `MessageProducer`
+
+
+Now, let's look at the Java code:
+
+[source,java]
+----
+include::{source}/com/example/aot/xml/XmlConfiguration.java[]
+----
+<1> the `XmlConfiguration` is just another `@Configuration`-annotated class as before, but this time with a very import directive: the `@ImportResource("app.xml")` tells Spring to load the beans defined in the XML configuration file as beans in the `BeanFactory`
+<2> The `MessageProducer` supplies our message
+<3> The `XmlLoggingApplicationListener` uses the `MessageProducer` to print out a message. Nothing particularly special.
+
+Compile and run the application as a native image and you'll see the output: `the message is ...`, which will only work if Spring's able to correctly read and run the XML configuration file.
 
 === Scopes
 
@@ -477,6 +510,12 @@ In this example, we're using the cohesive design of Spring's AOT engine to trans
 Compile and run the application, and you should see information logged when we invoke the method in the `ApplicationListener`.
 
 === Code Generation
+
+Now, before we go much further, let me just stress that this _isn't_ the return of  https://docs.spring.io/spring-roo/docs/current/reference/html/[Spring Roo]!
+
+image::images/roo.png[]
+
+But code generation is a powerful part of the Spring AOT engine. It manifests in two ways: generating the requisite `.json` configuration files for GraalVM native images, and  generating Java code, in `.java` files, from whole cloth.
 
 Suppose you're using a library, and it is using `InvocationHandler`, outside of Spring's purview. You'll need to furnish the appropriate hints for GraalVM knows what to do there. You might also have stuff you want to do at runtime that requires upfront, compile-time processing. Code generation is one of the most powerful dimensions of Spring's AOT engine. We use it all over the place in Spring Framework 6!  You can both furnish configuration and generate code at compile with implementations of the AOT equivalent to `BeanPostProcessor`, the  `BeanRegistrationAotProcessor`.
 

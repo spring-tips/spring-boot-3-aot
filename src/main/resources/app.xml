@@ -4,11 +4,13 @@
        xsi:schemaLocation="
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
 
-
+    <!--1-->
     <bean class="com.example.aot.xml.MessageProducer" id ="messageProducer"/>
 
+    <!--2-->
     <bean class="com.example.aot.xml.XmlLoggingApplicationListener" >
         <property name="producer" ref="messageProducer"/>
     </bean>
+
 
 </beans>

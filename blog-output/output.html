@@ -628,7 +628,7 @@ interface CustomerRepository extends CrudRepository&lt;Customer, Integer&gt; {
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">mvn -DskipTests spring-boot:run</code></pre>
+<pre class="highlightjs highlight"><code class="language-shell hljs" data-lang="shell">mvn -DskipTests spring-boot:run</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -765,7 +765,12 @@ class EventsConfiguration {
 </div>
 </div>
 <div class="sect2">
-<h3 id="_a_reusable_recipe_for_object_creation">A Reusable Recipe for Object Creation</h3>
+<h3 id="_factorybeans_a_reusable_recipe_for_object_creation">FactoryBeans: A Reusable Recipe for Object Creation</h3>
+<div class="imageblock">
+<div class="content">
+<img src="./images/factorybean.png" alt="factorybean">
+</div>
+</div>
 <div class="paragraph">
 <p>Sometimes objects require finessing and customization. Sometimes, creating an object becomes more complicated than just a simple constructor. Therefore, isolating this construction logic in a single place is helpful because it is reusable. There are at least two patterns that describe this sort of parameterized construction beside a constructor:</p>
 </div>
@@ -867,6 +872,114 @@ class Cat implements Animal {
 <p>the client code injects the <code>Animal</code>, ignorant of the construction logic.</p>
 </li>
 </ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_xml_configuration">XML Configuration</h3>
+<div class="paragraph">
+<p>Now, I know you didn&#8217;t ask, but just in case you were wondering: Spring&#8217;s new AOT engine works well enough with classic XML application configuration. We talked about XML configuration when we introduced the idea that Spring <em>ingests</em>, or reads in, configuration from various sources, one of which is XML files.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="./images/xml.png" alt="xml">
+</div>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s look, ever so quickly, at an example. First, the XML configuration file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;?xml version="1.0" encoding="UTF-8" ?&gt;
+&lt;beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd"&gt;
+
+    &lt;!--<b class="conum">(1)</b>--&gt;
+    &lt;bean class="com.example.aot.xml.MessageProducer" id ="messageProducer"/&gt;
+
+    &lt;!--<b class="conum">(2)</b>--&gt;
+    &lt;bean class="com.example.aot.xml.XmlLoggingApplicationListener" &gt;
+        &lt;property name="producer" ref="messageProducer"/&gt;
+    &lt;/bean&gt;
+
+
+&lt;/beans&gt;</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this <code>&lt;bean/&gt;</code> element defines a bean of type <code>MessageProducer</code></p>
+</li>
+<li>
+<p>this <code>&lt;bean/&gt;</code> element defines a bean of type <code>XmlLoggingApplicationListener</code>, which in turn injects an instance of type <code>MessageProducer</code></p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Now, let&#8217;s look at the Java code:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">package com.example.aot.xml;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.ImportResource;
+import org.springframework.lang.Nullable;
+
+import java.util.function.Supplier;
+
+@Configuration
+@ImportResource("app.xml")
+class XmlConfiguration {
+
+}
+
+class MessageProducer implements Supplier&lt;String&gt; {
+
+	@Override
+	public String get() {
+		return "Hello, world!";
+	}
+
+}
+
+class XmlLoggingApplicationListener implements ApplicationListener&lt;ApplicationReadyEvent&gt; {
+
+	@Nullable
+	private MessageProducer producer;
+
+	public void setProducer(@Nullable MessageProducer producer) {
+		this.producer = producer;
+	}
+
+	@Override
+	public void onApplicationEvent(ApplicationReadyEvent event) {
+		var message = this.producer.get();
+		System.out.println("the message is " + message);
+	}
+
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>the <code>XmlConfiguration</code> is just another <code>@Configuration</code>-annotated class as before, but this time with a very import directive: the <code>@ImportResource("app.xml")</code> tells Spring to load the beans defined in the XML configuration file as beans in the <code>BeanFactory</code></p>
+</li>
+<li>
+<p>The <code>MessageProducer</code> supplies our message</p>
+</li>
+<li>
+<p>The <code>XmlLoggingApplicationListener</code> uses the <code>MessageProducer</code> to print out a message. Nothing particularly special.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Compile and run the application as a native image and you&#8217;ll see the output: <code>the message is &#8230;&#8203;</code>, which will only work if Spring&#8217;s able to correctly read and run the XML configuration file.</p>
 </div>
 </div>
 <div class="sect2">
@@ -1818,6 +1931,17 @@ class OrderService {
 <div class="sect2">
 <h3 id="_code_generation">Code Generation</h3>
 <div class="paragraph">
+<p>Now, before we go much further, let me just stress that this <em>isn&#8217;t</em> the return of  <a href="https://docs.spring.io/spring-roo/docs/current/reference/html/">Spring Roo</a>!</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/roo.png" alt="roo">
+</div>
+</div>
+<div class="paragraph">
+<p>But code generation is a powerful part of the Spring AOT engine. It manifests in two ways: generating the requisite <code>.json</code> configuration files for GraalVM native images, and  generating Java code, in <code>.java</code> files, from whole cloth.</p>
+</div>
+<div class="paragraph">
 <p>Suppose you&#8217;re using a library, and it is using <code>InvocationHandler</code>, outside of Spring&#8217;s purview. You&#8217;ll need to furnish the appropriate hints for GraalVM knows what to do there. You might also have stuff you want to do at runtime that requires upfront, compile-time processing. Code generation is one of the most powerful dimensions of Spring&#8217;s AOT engine. We use it all over the place in Spring Framework 6!  You can both furnish configuration and generate code at compile with implementations of the AOT equivalent to <code>BeanPostProcessor</code>, the  <code>BeanRegistrationAotProcessor</code>.</p>
 </div>
 <div class="paragraph">
@@ -1972,7 +2096,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671163253822L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671165136311L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -2133,7 +2257,7 @@ class MigrationsConfigurationTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-15 20:00:39 -0800
+Last updated 2022-12-15 20:32:09 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

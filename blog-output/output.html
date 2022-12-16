@@ -455,10 +455,18 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <p>Spring Boot 3&#8217;s AOT engine introduces a new component model designed to provide extra information about a Spring application to support optimizing the application both on the JRE and in a GraalVM native image context. For the 80% case, you shouldn&#8217;t worry about a thing. But, sometimes, you may need to intervene to get the best results. This text aims to introduce the engine, its happy-path usage, and the corner-case use.</p>
 </div>
 <div class="paragraph">
-<p>Why would you need to intervene? What could go wrong? GraalVM native image compilation, that&#8217;s what. GraalVM&#8217;s native image compilation produces lightning-quick and super memory-efficient binaries. The caveat is that to achieve this magic trick, GraalVM&#8217;s native image compiler needs to know when you do certain things, like reflection, proxies, JNI, serialization, etc. So somebody has to provide that configuration.</p>
+<p>Why would you need to intervene? What could go wrong? GraalVM native image compilation, that&#8217;s what. GraalVM&#8217;s native image compilation produces lightning-quick and super memory-efficient binaries. The caveat is that to achieve this magic trick, GraalVM&#8217;s native image compiler does a compile time scan to determine what types are used, and what types those types use, and what types those types use, etc., all the way down the line until it <em>thinks</em> it knows what you&#8217;re going to need to completely run the program. Then, it throws <em>everything</em> else away! This scan is sometimes called the reachability analysis, since only things that are transitively <em>reachable</em> from the <code>main()</code> method of the program are preserved. The problem is that this compile time scan can&#8217;t deterministically predict every runtime use of types because Java has so many dynamic behaviors, like reflection, proxies, JNI, serialization, etc. Somebody or something has to tell GraalVM about these particular usecases.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="./images/reachability-metadata.png" alt="reachability metadata">
+</div>
 </div>
 <div class="paragraph">
-<p>The GraalVM native image compiler needs this configuration specified either as command line switches or as <code>.json</code> configuration files present on the classpath - <code>META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json</code>. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.</p>
+<p>The GraalVM native image compiler needs this configuration specified either as command line switches or as <code>.json</code> configuration files present on the classpath - <code>META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json</code>. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. There&#8217;s also an Oracle led effort called the GraalVM reachability repository that is a central repository of configuration provided for common libraries that don&#8217;t ship their own <code>.json</code> configuration files (yet). Spring Boot 3 is the first framework to take advantage of this reachability repository out of the box.</p>
+</div>
+<div class="paragraph">
+<p>But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.</p>
 </div>
 <div class="paragraph">
 <p>In this release, we&#8217;ve introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation. That&#8217;s the dream, anyway, and we&#8217;re essentially there already. This text will look at the new AOT engine, GraalVM, and the increasingly rarer corner cases requiring some intervention.</p>
@@ -1003,12 +1011,20 @@ class XmlLoggingApplicationListener implements ApplicationListener&lt;Applicatio
 </li>
 </ul>
 </div>
+<div class="imageblock">
+<div class="content">
+<img src="./images/scopes.png" alt="scopes">
+</div>
+</div>
 <div class="paragraph">
 <p>This mechanism is pluggable, so implementors may also provide their scopes. Spring does this across the portfolio in projects like Spring Web Flow and Spring Batch. You&#8217;ll also see it in third-party projects like the Flowable workflow engine.</p>
 </div>
+<div class="paragraph">
+<p>Let&#8217;s look at an example where a Spring controller uses a request-scoped bean. The bean&#8217;s state should change from one HTTP request to another, and the client - the HTTP controller - doesn&#8217;t need to do anything. It&#8217;s as though the instance is swapped out from under neath it, in a way that&#8217;s completely transparent to the client.</p>
+</div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">package com.example.aot.scopes;
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">package com.example.aot.scopes;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -2096,7 +2112,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671165136311L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671166375388L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -2257,7 +2273,7 @@ class MigrationsConfigurationTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-15 20:32:09 -0800
+Last updated 2022-12-15 20:52:48 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

@@ -11,9 +11,13 @@ Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know th
 
 Spring Boot 3's AOT engine introduces a new component model designed to provide extra information about a Spring application to support optimizing the application both on the JRE and in a GraalVM native image context. For the 80% case, you shouldn't worry about a thing. But, sometimes, you may need to intervene to get the best results. This text aims to introduce the engine, its happy-path usage, and the corner-case use.
 
-Why would you need to intervene? What could go wrong? GraalVM native image compilation, that's what. GraalVM's native image compilation produces lightning-quick and super memory-efficient binaries. The caveat is that to achieve this magic trick, GraalVM's native image compiler needs to know when you do certain things, like reflection, proxies, JNI, serialization, etc. So somebody has to provide that configuration.
+Why would you need to intervene? What could go wrong? GraalVM native image compilation, that's what. GraalVM's native image compilation produces lightning-quick and super memory-efficient binaries. The caveat is that to achieve this magic trick, GraalVM's native image compiler does a compile time scan to determine what types are used, and what types those types use, and what types those types use, etc., all the way down the line until it _thinks_ it knows what you're going to need to completely run the program. Then, it throws _everything_ else away! This scan is sometimes called the reachability analysis, since only things that are transitively _reachable_ from the `main()` method of the program are preserved. The problem is that this compile time scan can't deterministically predict every runtime use of types because Java has so many dynamic behaviors, like reflection, proxies, JNI, serialization, etc. Somebody or something has to tell GraalVM about these particular usecases.
 
-The GraalVM native image compiler needs this configuration specified either as command line switches or as `.json` configuration files present on the classpath - `META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json`. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.
+image::{root}/images/reachability-metadata.png[]
+
+The GraalVM native image compiler needs this configuration specified either as command line switches or as `.json` configuration files present on the classpath - `META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json`. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. There's also an Oracle led effort called the GraalVM reachability repository that is a central repository of configuration provided for common libraries that don't ship their own `.json` configuration files (yet). Spring Boot 3 is the first framework to take advantage of this reachability repository out of the box.
+
+But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.
 
 In this release, we've introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation. That's the dream, anyway, and we're essentially there already. This text will look at the new AOT engine, GraalVM, and the increasingly rarer corner cases requiring some intervention.
 
@@ -220,9 +224,15 @@ Beans in Spring have a lifecycle governing a given object's lifetime. Unless you
 * `web` - each new HTTP request gets a new bean instance.
 * `thread` - beans are unique to each thread. Sort of like a `ThreadLocal`.
 
+
+image::{root}/images/scopes.png[]
+
+
 This mechanism is pluggable, so implementors may also provide their scopes. Spring does this across the portfolio in projects like Spring Web Flow and Spring Batch. You'll also see it in third-party projects like the Flowable workflow engine.
 
-[source,sql]
+Let's look at an example where a Spring controller uses a request-scoped bean. The bean's state should change from one HTTP request to another, and the client - the HTTP controller - doesn't need to do anything. It's as though the instance is swapped out from under neath it, in a way that's completely transparent to the client.
+
+[source,java]
 ----
 include::{source}/com/example/aot/scopes/ScopesConfiguration.java[]
 ----

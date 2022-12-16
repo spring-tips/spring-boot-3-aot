@@ -1,11 +1,18 @@
 :root: .
 :source: ./src/main/java
 :source-highlighter: highlight.js
+:toc:
+:toc-placement: macro
 :author: Josh Long
+:email: josh@joshlong.com
+:keywords: Spring Boot 3, GraalVM, AOT
 
 
 
 = Everything You Never Wanted to Know About Spring Boot 3 AOT
+Josh Long;
+
+toc::[]
 
 Hi, Spring fans! Spring Boot 3 is here, and it's amazing! If you want to know the broad strokes of Spring Framework 6 includes, check https://www.youtube.com/watch?v=aUm5WZjh8RA[out this Spring Tips video] for a quick rundown. In this text, however, I want to look at the details of the brand-new ahead-of-time (AOT) compilation engine in Spring Boot 3.
 

@@ -5,6 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="generator" content="Asciidoctor 2.0.18">
+<meta name="keywords" content="Spring Boot 3, GraalVM, AOT">
 <meta name="author" content="Josh Long">
 <title>Everything You Never Wanted to Know About Spring Boot 3 AOT</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
@@ -443,11 +444,55 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <h1>Everything You Never Wanted to Know About Spring Boot 3 AOT</h1>
 <div class="details">
 <span id="author" class="author">Josh Long</span><br>
+<span id="email" class="email"><a href="mailto:josh@joshlong.com">josh@joshlong.com</a></span><br>
 </div>
 </div>
 <div id="content">
 <div id="preamble">
 <div class="sectionbody">
+<div id="toc" class="toc">
+<div id="toctitle" class="title">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_introduction">Introduction</a>
+<ul class="sectlevel2">
+<li><a href="#_ingest">Ingest</a></li>
+<li><a href="#_beanfactory_creation_of_beandefinition_instances"><code>BeanFactory</code> creation of <code>BeanDefinition</code>  instances</a></li>
+<li><a href="#_bean_creation">Bean Creation</a></li>
+</ul>
+</li>
+<li><a href="#_enter_graalvm">Enter GraalVM</a></li>
+<li><a href="#_you_gotta_start_somewhere">You Gotta Start Somewhere</a></li>
+<li><a href="#_the_spring_component_model">The Spring component model</a>
+<ul class="sectlevel2">
+<li><a href="#_see_how_they_run">See How They Run</a></li>
+<li><a href="#_event_listeners">Event Listeners</a></li>
+<li><a href="#_factorybeans_a_reusable_recipe_for_object_creation">FactoryBeans: A Reusable Recipe for Object Creation</a></li>
+<li><a href="#_xml_configuration">XML Configuration</a></li>
+<li><a href="#_scopes">Scopes</a></li>
+<li><a href="#_qualifiers">Qualifiers</a></li>
+<li><a href="#_configuration_properties">Configuration Properties</a></li>
+</ul>
+</li>
+<li><a href="#_detecting_that_youre_in_a_native_image">Detecting that you&#8217;re in a Native Image</a></li>
+<li><a href="#_application_migration">Application Migration</a>
+<ul class="sectlevel2">
+<li><a href="#_run_the_aot_code_on_the_jre">Run the AOT Code on the JRE</a></li>
+<li><a href="#_run_the_java_agent">Run the Java Agent</a></li>
+<li><a href="#_soft_touch_refactorings_to_enable_aot">Soft-touch Refactorings to Enable AOT</a></li>
+</ul>
+</li>
+<li><a href="#_processing_the_bean_factory">Processing the Bean Factory</a></li>
+<li><a href="#_processing_beans">Processing Beans</a>
+<ul class="sectlevel2">
+<li><a href="#_proxies">Proxies</a></li>
+<li><a href="#_code_generation">Code Generation</a></li>
+</ul>
+</li>
+<li><a href="#_testing">Testing</a></li>
+<li><a href="#_a_note_on_compile_times">A Note on Compile Times</a></li>
+<li><a href="#_conclusion">Conclusion</a></li>
+</ul>
+</div>
 <div class="paragraph">
 <p>Hi, Spring fans! Spring Boot 3 is here, and it&#8217;s amazing! If you want to know the broad strokes of Spring Framework 6 includes, check <a href="https://www.youtube.com/watch?v=aUm5WZjh8RA">out this Spring Tips video</a> for a quick rundown. In this text, however, I want to look at the details of the brand-new ahead-of-time (AOT) compilation engine in Spring Boot 3.</p>
 </div>
@@ -2115,7 +2160,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671166537805L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671167362360L), new File("/Users/jlong/Drive/aot-ebook/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>
@@ -2276,7 +2321,7 @@ class MigrationsConfigurationTest {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-12-15 20:52:48 -0800
+Last updated 2022-12-15 21:08:26 -0800
 </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>

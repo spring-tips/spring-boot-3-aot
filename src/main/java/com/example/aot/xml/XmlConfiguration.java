@@ -8,12 +8,14 @@ import org.springframework.lang.Nullable;
 
 import java.util.function.Supplier;
 
+// <1>
 @Configuration
 @ImportResource("app.xml")
 class XmlConfiguration {
 
 }
 
+// <2>
 class MessageProducer implements Supplier<String> {
 
 	@Override
@@ -23,6 +25,7 @@ class MessageProducer implements Supplier<String> {
 
 }
 
+// <3>
 class XmlLoggingApplicationListener implements ApplicationListener<ApplicationReadyEvent> {
 
 	@Nullable

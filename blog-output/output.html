@@ -940,12 +940,14 @@ import org.springframework.lang.Nullable;
 
 import java.util.function.Supplier;
 
+// <b class="conum">(1)</b>
 @Configuration
 @ImportResource("app.xml")
 class XmlConfiguration {
 
 }
 
+// <b class="conum">(2)</b>
 class MessageProducer implements Supplier&lt;String&gt; {
 
 	@Override
@@ -955,6 +957,7 @@ class MessageProducer implements Supplier&lt;String&gt; {
 
 }
 
+// <b class="conum">(3)</b>
 class XmlLoggingApplicationListener implements ApplicationListener&lt;ApplicationReadyEvent&gt; {
 
 	@Nullable
@@ -2112,7 +2115,7 @@ import org.springframework.beans.factory.support.RegisteredBean;
 public class CompilationEndpoint__CompilationEndpointFeature {
   public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
       CompilationEndpoint inputBean) {
-    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671166375388L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1671166428040L), new File("/Users/jlong/Desktop/aot-ebook/spring-boot-3-aot/."));
     return outputBean;
   }
 }</code></pre>

@@ -1,0 +1,1403 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?asciidoc-toc?>
+<?asciidoc-numbered?>
+<article xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en">
+<info>
+<title>Everything You Never Wanted to Know About Spring Boot 3 AOT</title>
+<date>2023-02-02</date>
+<author>
+<personname>
+<firstname>Josh</firstname>
+<surname>Long</surname>
+</personname>
+<email>josh@joshlong.com</email>
+</author>
+<authorinitials>JL</authorinitials>
+</info>
+
+<simpara>Hi, Spring fans! Spring Boot 3 is here, and it&#8217;s amazing! If you want to know the broad strokes of Spring Framework 6 includes, check <link xl:href="https://www.youtube.com/watch?v=aUm5WZjh8RA">out this Spring Tips video</link> for a quick rundown. In this text, however, I want to look at the details of the brand-new ahead-of-time (AOT) compilation engine in Spring Boot 3.</simpara>
+<simpara>Spring Boot 3&#8217;s AOT engine introduces a new component model designed to provide extra information about a Spring application to support optimizing the application both on the JRE and in a GraalVM native image context. For the 80% case, you shouldn&#8217;t worry about a thing. But, sometimes, you may need to intervene to get the best results. This text aims to introduce the engine, its happy-path usage, and the corner-case use.</simpara>
+<simpara>Why would you need to intervene? What could go wrong? GraalVM native image compilation, that&#8217;s what. GraalVM&#8217;s native image compilation produces lightning-quick and super memory-efficient binaries. The caveat is that to achieve this magic trick, GraalVM&#8217;s native image compiler does a compile time scan to determine what types are used, and what types those types use, and what types those types use, etc., all the way down the line until it <emphasis>thinks</emphasis> it knows what you&#8217;re going to need to completely run the program. Then, it throws <emphasis>everything</emphasis> else away! This scan is sometimes called the reachability analysis, since only things that are transitively <emphasis>reachable</emphasis> from the <literal>main()</literal> method of the program are preserved. The problem is that this compile time scan can&#8217;t deterministically predict every runtime use of types because Java has so many dynamic behaviors, like reflection, proxies, JNI, serialization, etc. Somebody or something has to tell GraalVM about these particular usecases.</simpara>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="./images/reachability-metadata.png"/>
+</imageobject>
+<textobject><phrase>reachability metadata</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>The GraalVM native image compiler needs this configuration specified either as command line switches or as <literal>.json</literal> configuration files present on the classpath - <literal>META-INF/native-image/{reflect,jni,resource,proxy,etc.}-config.json</literal>. Ideally, each library will ship its configuration. For example, Apache Tomcat, Netty, etc., need to support their use by furnishing this configuration. There&#8217;s also an Oracle led effort called the GraalVM reachability repository that is a central repository of configuration provided for common libraries that don&#8217;t ship their own <literal>.json</literal> configuration files (yet). Spring Boot 3 is the first framework to take advantage of this reachability repository out of the box.</simpara>
+<simpara>But what about your code, written with Spring Framework? Spring (and Java, writ large) do many dynamic things with user-provided types that they need to account for with configuration, or the GraalVM compilation will fail.</simpara>
+<simpara>In this release, we&#8217;ve introduced a whole new engine - the Spring AOT engine - to make it possible to take your existing Spring Boot applications, upgrade them to Spring Boot 3, and then enjoy the incredible benefits of GraalVM native image compilation. That&#8217;s the dream, anyway, and we&#8217;re essentially there already. This text will look at the new AOT engine, GraalVM, and the increasingly rarer corner cases requiring some intervention.</simpara>
+<section xml:id="_introduction">
+<title>Introduction</title>
+<simpara>I find it helpful to understand where we were to appreciate where we are now. Traditional Spring applications have <emphasis>phases</emphasis> that they go through when they run. Here&#8217;s a simplified understanding of what&#8217;s happening in your standard Spring application:</simpara>
+<section xml:id="_ingest">
+<title>Ingest</title>
+<simpara>The Spring application starts up and reads in all the configuration sources. Remember: Spring Framework is a dependency management framework. It needs to know how your various objects are constructed, their lifecycles (constructors, <literal>InitializingBean#afterPropertiesSet</literal>,<literal>@PostConstruct</literal>, <literal>DisposableBean#destroy</literal>, <literal>@PreDestroy</literal>), etc. So it reads the various configuration files from all the <literal>@Configuration</literal>-annotated classes in your application through component scanning, where Spring discovers classes annotated with <literal>@Component</literal>. This component scanning also discovers classes annotated with annotations that have the <literal>@Component</literal> annotation on them, like <literal>@Service</literal>, <literal>@Repository</literal>, @Controller`, and <literal>@RestController</literal>. It also reads in configuration from Spring&#8217;s classic XML configuration format. (I don&#8217;t use the XML format and haven&#8217;t seen it in the wild in over half a decade, but <emphasis>still</emphasis>&#8230;&#8203;).</simpara>
+</section>
+<section xml:id="_beanfactory_creation_of_beandefinition_instances">
+<title><literal>BeanFactory</literal> creation of <literal>BeanDefinition</literal>  instances</title>
+<simpara>At this point, Spring turns all the various inputs into a metamodel representation of your objects, a <literal>BeanFactory</literal> full of <literal>BeanDefinition</literal> instances. These <literal>BeanDefinition</literal> instances describe the objects, wiring, and more. They represent the constructors, annotations, properties to be injected, setters, etc.  The <literal>BeanDefinition</literal> instances describe everything required to describe an object and get to a valid state so that it may be given to other objects and generally start doing work.</simpara>
+<simpara>Notably, at this phase, there are no live-fire beans. Nothing is opening ports and sockets, doing disk IO, etc. This phase in the <literal>BeanFactory</literal> does not involve any business logic.</simpara>
+</section>
+<section xml:id="_bean_creation">
+<title>Bean Creation</title>
+<simpara>Spring will take all the <literal>BeanDefinition</literal> instances and create actual, live-fire beans. Spring will call constructors, invoke lifecycle methods, etc. After this phase, you&#8217;ll have an application ready to serve production traffic. Being production-worthy is <emphasis>good</emphasis> &#8482;. We like production, don&#8217;t we?</simpara>
+<simpara>Spring Boot 3 introduces a new phase, at compile time, to support AOT.</simpara>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="images/bean-evolution.png"/>
+</imageobject>
+<textobject><phrase>bean evolution</phrase></textobject>
+</mediaobject>
+</informalfigure>
+</section>
+</section>
+<section xml:id="_enter_graalvm">
+<title>Enter GraalVM</title>
+<simpara><link xl:href="https://www.graalvm.org/">GraalVM</link> is a drop-in replacement for OpenJDK. It <emphasis>is</emphasis> OpenJDK, largely. It has a few extra utilities: notably, a polyglot VM, a native image compiler, and a replacement  HotSpot replacement for the JIT (just-in-time) compiler. We could spend all day on these extra features, but let&#8217;s focus on the <literal>native-image</literal> compiler. Henceforth, when I say "GraalVM," I refer to the <literal>native-image</literal> compiler.</simpara>
+</section>
+<section xml:id="_you_gotta_start_somewhere">
+<title>You Gotta Start Somewhere</title>
+<simpara>To start, as always, we&#8217;ll go to the <link xl:href="https://start.spring.io">Spring Initialzr (start.spring.io)</link>. Choose Spring Boot 3.0 or later from the Spring Initializr. I&#8217;m using Spring Boot 3, Apache Maven, and Java 17. Java 17 is the new baseline for Spring Framework 6 and Spring Boot 3. I&#8217;m also using GraalVM 22.3. If you&#8217;re using the fabulous <link xl:href="https://sdkman.io/">SDKMAN utility</link>, then you can do the following to get the same version of GraalVM that I have on my computer as of this writing (late 2022):</simpara>
+<programlisting language="shell" linenumbering="unnumbered">sdk install java 22.3.r17-grl</programlisting>
+<simpara>I&#8217;ve also added a few dependencies. We won&#8217;t touch on these dependencies in any great length, but they&#8217;ll help us to demonstrate a few concepts, so I&#8217;ve added them.</simpara>
+<itemizedlist>
+<listitem>
+<simpara>Web (<literal>org.springframework.boot</literal> : <literal>spring-boot-starter-web</literal>)</simpara>
+</listitem>
+<listitem>
+<simpara>Actuator (<literal>org.springframework.boot</literal> : <literal>spring-boot-starter-actuator</literal>)</simpara>
+</listitem>
+<listitem>
+<simpara>Spring Data JDBC (<literal>org.springframework.boot</literal> : <literal>spring-boot-starter-data-jdbc</literal>)</simpara>
+</listitem>
+<listitem>
+<simpara>H2 (<literal>com.h2database</literal> : <literal>h2</literal>)</simpara>
+</listitem>
+</itemizedlist>
+<simpara>And, of course, I&#8217;ve got a standard Spring Boot entry class.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class AotApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(AotApplication.class, args);
+	}
+
+}</programlisting>
+<simpara>I won&#8217;t add anything to this class. Instead, as we introduce new concepts, I&#8217;ll create new <literal>@Configuration</literal>-annotated classes in sub-packages. We won&#8217;t revisit this class.</simpara>
+<simpara>In practice, let&#8217;s look at our first example of the new AOT engine. This trivial and fairly typical application works with a database and surfaces an HTTP endpoint like any other trivial Spring Boot application. But, of course, you have seen this before.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.basics;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.repository.CrudRepository;
+
+import java.util.stream.Stream;
+
+@Configuration
+class BasicsConfiguration {
+
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; basicsApplicationListener(CustomerRepository repository) {
+		return event -&gt; repository //
+				.saveAll(Stream.of("A", "B", "C").map(name -&gt; new Customer(null, name)).toList()) //
+				.forEach(System.out::println);
+	}
+
+}
+
+<co xml:id="CO1-1"/>
+record Customer(@Id Integer id, String name) {
+}
+
+<co xml:id="CO1-2"/>
+interface CustomerRepository extends CrudRepository&lt;Customer, Integer&gt; {
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO1-1">
+<para>look ma, no Lombok!</para>
+</callout>
+<callout arearefs="CO1-2">
+<para>this is using Spring Data JDBC, and you can too!</para>
+</callout>
+</calloutlist>
+<simpara>You&#8217;ll need some SQL schema, so add <literal>src/main/resources/schema.sql</literal> for our SQL interactions; so let&#8217;s have Spring Boot create it for us on startup:</simpara>
+<programlisting language="sql" linenumbering="unnumbered">create table customer
+(
+    id   serial primary key,
+    name varchar(255) not null
+);</programlisting>
+<simpara>Run the main class in your IDE or on the command line in the usual ways:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">mvn -DskipTests spring-boot:run</programlisting>
+<simpara>You should see some output on the console. It works. Hurray. Moving on, let&#8217;s turn it into a native image, thusly:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">mvn -Pnative -DskipTests native:compile</programlisting>
+<simpara>That&#8217;ll take a minute to finish, so now&#8217;s a good time to pour a cup of coffee or tea. Maybe do a crossword puzzle. Reflect on your poor life choices to get to this point where your JVM applications take around a minute to compile. It&#8217;s a bit dispiriting. But always remember: good things come to those who wait!</simpara>
+<simpara>You&#8217;ll find the compiled binary in the <literal>target</literal> directory, named <literal>aot</literal>. Run it, and you&#8217;ll see it starts up in no time at all. Like a lightbulb! And, the best part is that it takes very little memory. Of course, there are different ways to measure memory, but looking at <link xl:href="https://en.wikipedia.org/wiki/Resident_set_size"><emphasis>resident set size</emphasis></link> is informative. Here&#8217;s a script I use to measure this stuff called <literal>rss.sh</literal>:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">#!/usr/bin/env bash
+PID=${1}
+RSS=`ps -o rss ${PID} | tail -n1`
+RSS=`bc &lt;&lt;&lt; "scale=1; ${RSS}/1024"`
+echo "${PID}: ${RSS}M"</programlisting>
+<simpara>It captures the RSS for a given process identifier, scales it to make it easier to parse, then prints it out. So, for example, you can find the process identifier (PID) for the Spring Boot application in the console towards the top of the application&#8217;s output.</simpara>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="images/pid.png"/>
+</imageobject>
+<textobject><phrase>pid</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>Take it and then pass it as the argument for <literal>rss.sh</literal>, like this:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">./rss.sh &lt;PID&gt;</programlisting>
+<simpara>On my 2021 M1 MacBook Pro, I tend to get numbers just south of 100MB. Not bad!   How much RAM is your current JVM application taking? I&#8217;d be pleasantly surprised if it were a gigabyte or less! Imagine being able to deploy the same application for 1/10th of the memory footprint!</simpara>
+</section>
+<section xml:id="_the_spring_component_model">
+<title>The Spring component model</title>
+<simpara>So, we know the basic stuff&#8217;s working. Spring&#8217;s got a rich, dynamic, multifaceted component model that can do amazing things. So, let&#8217;s look at some examples demonstrating a few interesting aspects of the Spring programming model, old and new(-ish). I hope, but don&#8217;t know, that a lot of this will rehash old stuff for many of you. So, feel free to skim this section and see if anything new in the headers strikes you as interesting. It&#8217;s here because I wanted to be thorough and view the rich Spring component model through the prism of the new Spring AOT engine.</simpara>
+<section xml:id="_see_how_they_run">
+<title>See How They Run</title>
+<simpara>You can compile and run all the code in the usual way as a GraalVM native image:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">mvn -DskipTests native:compile &amp;&amp; ./target/aot</programlisting>
+<simpara>Run the application, and you should see all the output from the previous examples, as expected. The best part? It&#8217;ll have started in no time and be far smaller than a binary and a process occupying RAM. You can use the <literal>rss.sh</literal> script we introduced to measure the process' RSS.</simpara>
+</section>
+<section xml:id="_event_listeners">
+<title>Event Listeners</title>
+<simpara>Did you know that Spring has an event bus that you can use to publish and receive events in one component or another? Any component can fire an event (or more) and listen to and consume these events. There are two ways to consume events: with a bean of type <literal>ApplicationListener&lt;ApplicationEvent&gt;</literal>, or with the <literal>@EventListener</literal> annotation.</simpara>
+<simpara>Here&#8217;s a simple example.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.events;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
+
+@Configuration
+class EventsConfiguration {
+
+	<co xml:id="CO2-1"/>
+	@Bean
+	ApplicationListener&lt;WebServerInitializedEvent&gt; webServerInitializedEventApplicationListener() {
+		return event -&gt; run("ApplicationListener&lt;WebServerInitializedEvent&gt;", event);
+	}
+
+	<co xml:id="CO2-2"/>
+	@EventListener
+	public void eventListener(ApplicationReadyEvent event) {
+		run("@EventListener", event);
+	}
+
+	private void run(String where, ApplicationEvent are) {
+		System.out.println(where + " : " + are);
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO2-1">
+<para>this is the first more traditional approach: a bean of type <literal>ApplicationListener&lt;T extends ApplicationEvent&gt;</literal>.</para>
+</callout>
+<callout arearefs="CO2-2">
+<para>this is the newer style, which frees your code of any explicit dependencies on the Spring framework</para>
+</callout>
+</calloutlist>
+<simpara>This example listens for two unrelated events. Although there is no significance to these events for our example, they demonstrate different ways of consuming Spring application events.</simpara>
+<itemizedlist>
+<listitem>
+<simpara><literal>WebServerInitializedEvent</literal> tells when the embedded web server has finished initializing.</simpara>
+</listitem>
+<listitem>
+<simpara>The <literal>ApplicationReadyEvent</literal> gets called as late as possible, right before the application handles traffic.</simpara>
+</listitem>
+</itemizedlist>
+<simpara>These are just a few of the events that Spring and Spring Boot emit as part of the lifecycle of an application. There are other events for all sorts of stuff, including Spring Security authentication, Actuator, Spring lifecycle, and more.</simpara>
+</section>
+<section xml:id="_factorybeans_a_reusable_recipe_for_object_creation">
+<title>FactoryBeans: A Reusable Recipe for Object Creation</title>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="./images/factorybean.png"/>
+</imageobject>
+<textobject><phrase>factorybean</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>Sometimes objects require finessing and customization. Sometimes, creating an object becomes more complicated than just a simple constructor. Therefore, isolating this construction logic in a single place is helpful because it is reusable. There are at least two patterns that describe this sort of parameterized construction beside a constructor:</simpara>
+<itemizedlist>
+<listitem>
+<simpara>the fluid builder pattern</simpara>
+</listitem>
+<listitem>
+<simpara>the factory pattern</simpara>
+</listitem>
+</itemizedlist>
+<simpara>There&#8217;s nothing Spring can do to support the first pattern: that&#8217;s very much up to each implementor how their types reflect the object creation patterns particular to their API. However, the Spring Framework <literal>FactoryBean&lt;T&gt;</literal> supports the second pattern. When you register a class of type <literal>FactoryBean&lt;T&gt;</literal> in the Spring context, it is the <emphasis>product</emphasis> (an instance of type <literal>T</literal>) of that <literal>FactoryBean&lt;T&gt;</literal>, not the <literal>FactoryBean&lt;T&gt;</literal> itself, that is registered in the application context and made available for injection. In other words, you can&#8217;t inject a reference to <literal>FactoryBean&lt;Foo&gt;</literal>, only <literal>Foo</literal>.</simpara>
+<simpara>Let&#8217;s look at its use in a trivial example:</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.factorybeans;
+
+import org.springframework.beans.factory.FactoryBean;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+class FactoryBeansConfiguration {
+
+	<co xml:id="CO3-1"/>
+	@Bean
+	AnimalFactoryBean animalFactoryBean() {
+		return new AnimalFactoryBean(true, false);
+	}
+
+	<co xml:id="CO3-2"/>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; factoryBeanListener(Animal animal) {
+		return event -&gt; animal.speak();
+	}
+
+}
+
+class AnimalFactoryBean implements FactoryBean&lt;Animal&gt; {
+
+	private final boolean likesYarn, likesFrisbees;
+
+	AnimalFactoryBean(boolean likesYarn, boolean likesFrisbees) {
+		this.likesYarn = likesYarn;
+		this.likesFrisbees = likesFrisbees;
+	}
+
+	@Override
+	public Animal getObject() {
+		return (this.likesYarn &amp;&amp; !this.likesFrisbees) ? new Cat() : new Dog();
+	}
+
+	@Override
+	public Class&lt;?&gt; getObjectType() {
+		return Animal.class;
+	}
+
+}
+
+interface Animal {
+
+	void speak();
+
+}
+
+class Dog implements Animal {
+
+	@Override
+	public void speak() {
+		System.out.println("woof");
+	}
+
+}
+
+class Cat implements Animal {
+
+	@Override
+	public void speak() {
+		System.out.println("meow");
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO3-1">
+<para>the <literal>AnimalFactoryBean</literal> produces an object of type <literal>Animal</literal>. But which? It depends on the parameters fed into the <literal>FactoryBean</literal>.</para>
+</callout>
+<callout arearefs="CO3-2">
+<para>the client code injects the <literal>Animal</literal>, ignorant of the construction logic.</para>
+</callout>
+</calloutlist>
+</section>
+<section xml:id="_xml_configuration">
+<title>XML Configuration</title>
+<simpara>Now, I know you didn&#8217;t ask, but just in case you were wondering: Spring&#8217;s new AOT engine works well enough with classic XML application configuration. We talked about XML configuration when we introduced the idea that Spring <emphasis>ingests</emphasis>, or reads in, configuration from various sources, one of which is XML files.</simpara>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="./images/xml.png"/>
+</imageobject>
+<textobject><phrase>xml</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>Let&#8217;s look, ever so quickly, at an example. First, the XML configuration file:</simpara>
+<programlisting language="xml" linenumbering="unnumbered">&lt;?xml version="1.0" encoding="UTF-8" ?&gt;
+&lt;beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd"&gt;
+
+    <co xml:id="CO4-1"/>
+    &lt;bean class="com.example.aot.xml.MessageProducer" id ="messageProducer"/&gt;
+
+    <co xml:id="CO4-2"/>
+    &lt;bean class="com.example.aot.xml.XmlLoggingApplicationListener" &gt;
+        &lt;property name="producer" ref="messageProducer"/&gt;
+    &lt;/bean&gt;
+
+
+&lt;/beans&gt;</programlisting>
+<calloutlist>
+<callout arearefs="CO4-1">
+<para>this <literal>&lt;bean/&gt;</literal> element defines a bean of type <literal>MessageProducer</literal></para>
+</callout>
+<callout arearefs="CO4-2">
+<para>this <literal>&lt;bean/&gt;</literal> element defines a bean of type <literal>XmlLoggingApplicationListener</literal>, which in turn injects an instance of type <literal>MessageProducer</literal></para>
+</callout>
+</calloutlist>
+<simpara>Now, let&#8217;s look at the Java code:</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.xml;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.ImportResource;
+import org.springframework.lang.Nullable;
+
+import java.util.function.Supplier;
+
+<co xml:id="CO5-1"/>
+@Configuration
+@ImportResource("app.xml")
+class XmlConfiguration {
+
+}
+
+<co xml:id="CO5-2"/>
+class MessageProducer implements Supplier&lt;String&gt; {
+
+	@Override
+	public String get() {
+		return "Hello, world!";
+	}
+
+}
+
+<co xml:id="CO5-3"/>
+class XmlLoggingApplicationListener implements ApplicationListener&lt;ApplicationReadyEvent&gt; {
+
+	@Nullable
+	private MessageProducer producer;
+
+	public void setProducer(@Nullable MessageProducer producer) {
+		this.producer = producer;
+	}
+
+	@Override
+	public void onApplicationEvent(ApplicationReadyEvent event) {
+		var message = this.producer.get();
+		System.out.println("the message is " + message);
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO5-1">
+<para>the <literal>XmlConfiguration</literal> is just another <literal>@Configuration</literal>-annotated class as before, but this time with a very import directive: the <literal>@ImportResource("app.xml")</literal> tells Spring to load the beans defined in the XML configuration file as beans in the <literal>BeanFactory</literal></para>
+</callout>
+<callout arearefs="CO5-2">
+<para>The <literal>MessageProducer</literal> supplies our message</para>
+</callout>
+<callout arearefs="CO5-3">
+<para>The <literal>XmlLoggingApplicationListener</literal> uses the <literal>MessageProducer</literal> to print out a message. Nothing particularly special.</para>
+</callout>
+</calloutlist>
+<simpara>Compile and run the application as a native image and you&#8217;ll see the output: <literal>the message is &#8230;&#8203;</literal>, which will only work if Spring&#8217;s able to correctly read and run the XML configuration file.</simpara>
+</section>
+<section xml:id="_scopes">
+<title>Scopes</title>
+<simpara>Beans in Spring have a lifecycle governing a given object&#8217;s lifetime. Unless you specify something precisely, the default scope is <literal>singleton</literal>. Here are some of the more commonly used scopes.</simpara>
+<itemizedlist>
+<listitem>
+<simpara><literal>singleton</literal> - Spring creates a bean when the application starts up and destroys it when it shuts down. A bean defined in this way is <emphasis>global</emphasis> - all clients of the bean will see the same state. So take care to handle concurrent access to this state in the same way you would any multithreaded access.</simpara>
+</listitem>
+<listitem>
+<simpara><literal>session</literal> - a bean is created anew for each new HTTP Session. Each user with an HTTP session will have their instance of the bean. Changes won&#8217;t be visible to other clients.</simpara>
+</listitem>
+<listitem>
+<simpara><literal>web</literal> - each new HTTP request gets a new bean instance.</simpara>
+</listitem>
+<listitem>
+<simpara><literal>thread</literal> - beans are unique to each thread. Sort of like a <literal>ThreadLocal</literal>.</simpara>
+</listitem>
+</itemizedlist>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="./images/scopes.png"/>
+</imageobject>
+<textobject><phrase>scopes</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>This mechanism is pluggable, so implementors may also provide their scopes. Spring does this across the portfolio in projects like Spring Web Flow and Spring Batch. You&#8217;ll also see it in third-party projects like the Flowable workflow engine.</simpara>
+<simpara>Let&#8217;s look at an example where a Spring controller uses a request-scoped bean. The bean&#8217;s state should change from one HTTP request to another, and the client - the HTTP controller - doesn&#8217;t need to do anything. It&#8217;s as though the instance is swapped out from under neath it, in a way that&#8217;s completely transparent to the client.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.scopes;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.annotation.RequestScope;
+
+import java.util.UUID;
+
+@Configuration
+class ScopesConfiguration {
+
+}
+
+<co xml:id="CO6-1"/>
+@Component
+@RequestScope
+class RequestContext {
+
+	private final String uuid = UUID.randomUUID().toString(); <co xml:id="CO6-2"/>
+
+	public String getUuid() {
+		return uuid;
+	}
+
+}
+
+@RestController
+class ContextHttpController {
+
+	private final RequestContext context;
+
+	<co xml:id="CO6-3"/>
+	ContextHttpController(RequestContext context) {
+		this.context = context;
+	}
+
+	@GetMapping("/scopes/context")
+	String uuid() {
+		return this.context.getUuid();
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO6-1">
+<para>this bean is a <literal>request</literal> scoped, so it&#8217;ll be created anew for each incoming HTTP request.</para>
+</callout>
+<callout arearefs="CO6-2">
+<para>this request-scoped bean should be different across different HTTP requests but the same for successive accesses during the same HTTP request.</para>
+</callout>
+<callout arearefs="CO6-3">
+<para>Spring is giving us a proxy, which won&#8217;t result in an actual instance until the bean starts its lifecycle, bound to whatever externalities govern them.</para>
+</callout>
+</calloutlist>
+<simpara>Compile the application and visit  <literal><link xl:href="http://localhost:8080/scopes/context">http://localhost:8080/scopes/context</link></literal> in your browser a few times. You should see that the <literal>UUID</literal> differs in each HTTP request.</simpara>
+</section>
+<section xml:id="_qualifiers">
+<title>Qualifiers</title>
+<simpara>Qualifiers are conceptually very simple: given two types with the same interface, how does Spring choose which to inject in a given place? The answer is that we <emphasis>qualify</emphasis> the bean we&#8217;d like.</simpara>
+<simpara>Suppose we&#8217;re trying to build two applications with competing mobile phone marketplace implementations, like the Apple AppStore and Android&#8217;s Play store.</simpara>
+<simpara>We might model them with an interface, which we&#8217;re calling <literal>MobileMarketplace</literal>. In this example, we have two implementations of that interface, and we&#8217;ve used the <literal>@Qualifier</literal> annotation on both the bean itself and the place where the Spring injects it. As long as the <literal>String</literal> <literal>value</literal> in the annotation matches, Spring will inject the correct instance.  This mechanism goes even further:  you can put <literal>@Qualifier</literal> on your custom annotation and then use that annotation instead of <literal>@Qualifier</literal> directly on the various implementations. This practice helps you enforce a ubiquitous language, making your code&#8217;s domain more approachable.</simpara>
+<simpara>Let&#8217;s look at an example:</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.qualifiers;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Service;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.Map;
+
+@Configuration
+class QualifiersConfiguration {
+
+	<co xml:id="CO7-1"/>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; android(@Android MobileMarketplace mobileMarketplace) {
+		return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
+	}
+
+	<co xml:id="CO7-2"/>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; ios(@Apple MobileMarketplace mobileMarketplace) {
+		return event -&gt; System.out.println(mobileMarketplace.getClass().toString());
+	}
+
+	<co xml:id="CO7-3"/>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; mobileMarketplaceListener(
+			Map&lt;String, MobileMarketplace&gt; mobileMarketplaces) {
+		return event -&gt; mobileMarketplaces
+				.forEach((key, bean) -&gt; System.out.println(key + '=' + bean.getClass().getName()));
+	}
+
+}
+
+<co xml:id="CO7-4"/>
+@Retention(RetentionPolicy.RUNTIME)
+@Qualifier("ios")
+@interface Apple {
+
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Qualifier("android")
+@interface Android {
+
+}
+
+interface MobileMarketplace {
+
+}
+
+<co xml:id="CO7-5"/>
+@Service
+@Qualifier("ios")
+class AppStore implements MobileMarketplace {
+
+}
+
+@Service
+@Qualifier("android")
+class PlayStore implements MobileMarketplace {
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO7-1">
+<para>this bean uses the <literal>android</literal> implementation</para>
+</callout>
+<callout arearefs="CO7-2">
+<para>this bean uses the <literal>apple</literal> implementation</para>
+</callout>
+<callout arearefs="CO7-3">
+<para>can&#8217;t decide? Just inject a <literal>Map&lt;String,T&gt;</literal>, where <literal>T</literal> is the type you&#8217;re looking for. Spring will provide a map of bean names to bean instances.</para>
+</callout>
+<callout arearefs="CO7-4">
+<para>we create a meta-annotation.</para>
+</callout>
+<callout arearefs="CO7-5">
+<para>we implement the interface</para>
+</callout>
+</calloutlist>
+<simpara>I love that I can directly define a bean&#8217;s qualifier using the <literal>@Qualifier</literal> annotation and inject it into a particular site using the meta-annotation. Or vice versa, or both. Spring doesn&#8217;t care. <emphasis>It just works</emphasis>.</simpara>
+<simpara>Compile and run the code to the correct instances printed out.</simpara>
+</section>
+<section xml:id="_configuration_properties">
+<title>Configuration Properties</title>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="images/environment.png"/>
+</imageobject>
+<textobject><phrase>environment</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>Spring Framework provides the <literal>Environment</literal> abstraction, mapping between a <literal>String</literal> key and a <literal>String</literal> value. In addition, there is a strategy interface (<literal>PropertyResolver</literal>) for resolving these properties. Spring Boot can then take values in the <literal>Environment</literal> and map them to objects via setters or their constructors. Here&#8217;s an example:</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.properties;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@EnableConfigurationProperties(DemoProperties.class)
+class PropertiesConfiguration {
+
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; propertiesApplicationListener( <co xml:id="CO8-1"/>
+			DemoProperties properties) {
+		return args -&gt; System.out.println("the name is " + properties.name());
+	}
+
+}
+
+<co xml:id="CO8-2"/>
+@ConfigurationProperties(prefix = "bootiful")
+record DemoProperties(String name) {
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO8-1">
+<para>Here, we&#8217;re injecting a Java object called <literal>DemoProperties</literal>, to which properties starting with <literal>bootiful</literal> are bound</para>
+</callout>
+<callout arearefs="CO8-2">
+<para>the <literal>@ConfigurationProperties</literal> annotation wires Spring to inject properties onto an instance of <literal>DemoProperties</literal>.</para>
+</callout>
+</calloutlist>
+<simpara>Compile and run the code to see the values reflected in the output.</simpara>
+</section>
+</section>
+<section xml:id="_detecting_that_youre_in_a_native_image">
+<title>Detecting that you&#8217;re in a Native Image</title>
+<simpara>Sometimes hopefully not often! - you&#8217;ll want to know when your code runs in a native image context. Knowing when your application is running is helpful because, as good as Spring&#8217;s AOT engine is, we can&#8217;t make it work perfectly in every situation, short of reviewing every line of code written. Some oddities arise from working in a GraalVM native image, and it&#8217;s essential to be aware of those.</simpara>
+<simpara>There is one helpful System property that you can use here: <literal>org.graalvm.native image.imagecode</literal>.  We&#8217;ve encapsulated that check-in a method in Spring Framework: <literal>NativeDetector.inNativeImage()</literal>. So here it is in action.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.detection;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.NativeDetector;
+
+@Configuration
+class DetectionConfiguration {
+
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; detectionListener() {
+		return args -&gt; System.out.println("is native image? " + NativeDetector.inNativeImage());
+	}
+
+}</programlisting>
+<simpara>Run it on the JRE, and it&#8217;ll return <literal>false</literal>. Run it in a GraalVM native image, and it&#8217;ll return <literal>true</literal>.</simpara>
+<simpara>My first instinct when I learned about that property was to wrap it in a <literal>Condition</literal> object and then use <literal>@Conditional</literal> to call that <literal>Condition</literal>, and thus make beans available in the Spring <literal>BeanFactory</literal> <emphasis>conditionally</emphasis>.</simpara>
+<simpara>I tried it, and it didn&#8217;t work.</simpara>
+<simpara>Recall our discussion around the <emphasis>phases</emphasis> of a Spring Boot application. It starts up, <emphasis>ingests</emphasis> all the configuration, then creates a metamodel representation of the beans (<literal>BeanDefinition</literal> instances). Finally, Spring creates all the beans out of those <literal>BeanDefinition</literal> instances.</simpara>
+<simpara>In an AOT application intended for GraalVM native image compilation, Spring Framework introduces a new phase during the compilation of the code. In this new phase, the Spring Boot build plugin creates a <literal>BeanFactory</literal> with populated <literal>BeanDefinition</literal> instances and stops there. Spring has a few new interfaces that are created and given a chance to inspect this <literal>BeanFactory</literal>, contributing whatever extra metadata is required to compile the beans in a GraalVM native image properly.</simpara>
+<simpara>These interfaces also generate <emphasis>new</emphasis>, optimized code to recreate the state of the <literal>BeanFactory</literal> and skip the ingest phase. This new code and the contributed metadata are ultimately sent into the GraalVM native image compiler for compilation into a native image.</simpara>
+<simpara>Spring only includes the beans in the final build present in the <literal>BeanFactory</literal> at compile time. So, if you have a bean that wasn&#8217;t created at compile time because some <literal>@Conditional</literal> test evaluated to <literal>false</literal>, or because some profile wasn&#8217;t active, it won&#8217;t be there in the native image. To that end, I&#8217;d strongly urge you to avoid using profiles if you intend to create a GraalVM native image. There are some <literal>@Conditional</literal> annotations you should avoid, too.</simpara>
+<simpara>Spring&#8217;s AOT engine evaluates the <literal>@Conditional</literal> annotations at compile time. Some invariant conditions are the same at compilation time and runtime - like <literal>@ConditionalOnClass</literal> and <literal>@ConditionalOnProperty</literal>. They work just fine in the native world: the classes present at compile time are, by definition, the classes present at runtime. However, some conditions depend on ambient state, like whether you&#8217;re running in a Kubernetes cluster (<literal>@ConditionalOnCloudPlatform(platform=CloudPlatform.Kubernetes)</literal>). Avoid these conditions unless you plan on compiling your code in a Kubernetes cluster.</simpara>
+</section>
+<section xml:id="_application_migration">
+<title>Application Migration</title>
+<simpara>So far, everything works well out of the box. Our goal is that the vast majority of Spring applications have a path to upgrade to Spring Boot 3 and then enjoy the benefits of native image compilation. But, sometimes, things don&#8217;t work as expected because some code has done something to run afoul of the cases, as mentioned earlier, where you&#8217;ll need to furnish configuration <literal>.json</literal> files.</simpara>
+<simpara>The error messages are pretty helpful, but the cycle time of compiling and running the application, getting a compiler error, making a change, then repeating can be tedious, especially when 30 seconds or longer compile times and long reset cycles are involved!</simpara>
+<simpara>Once you know what configuration your application will need, it&#8217;s pretty straightforward to craft the hints using the Java API. The trouble is, how do you figure out what hints are required? It can be tortuous to have an idea, make the change, then wait a minute (or more!) to find out if that worked and - if not - what the next error is. The reset cycle is what scares people. Mercifully, there are some pretty good ways to get a lot of this work done for you: running in AOT mode on the JRE and the GraalVM Java agent.</simpara>
+<section xml:id="_run_the_aot_code_on_the_jre">
+<title>Run the AOT Code on the JRE</title>
+<simpara>The first thing you might do is run the code in AOT mode. If you think about it,   Spring Boot applications now have three different runtime destinations:</simpara>
+<itemizedlist>
+<listitem>
+<simpara>traditional Spring Boot running on the JRE. This mode is the default and works exactly as it always has. Do nothing different, and you&#8217;ll get this mode.</simpara>
+</listitem>
+<listitem>
+<simpara>code generated during the AOT phase of compilation, also run on the JRE</simpara>
+</listitem>
+<listitem>
+<simpara>code generated during the AOT phase of compilation, running in a GraalVM native image.</simpara>
+</listitem>
+</itemizedlist>
+<simpara>You get slightly more optimized performance when running AOT code on the JRE. Your application will perform considerably better when running the AOT code in a GraalVM native image.  That second option - running AOT code on the JRE - is also interesting because it lets you preview what will get fed into the GraalVM native image compiler, which is more performant than the traditional behavior.</simpara>
+<simpara>You can generate the AOT code without doing a full GraalVM reset:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">mvn clean compile spring-boot:process-aot package</programlisting>
+<simpara>This command transforms your Spring application and generates GraalVM native image hints in the <literal>target/spring-aot</literal> directory of your application. You can inspect that directory to see which GraalVM native image hints were generated (under the <literal>target</literal> directory) and what code was generated (under the <literal>sources</literal> directory).</simpara>
+<simpara>There&#8217;s a lot of interesting stuff happening here. The most important thing, from my perspective, is <literal>AotApplication__BeanFactoryRegistrations.java</literal>, in which all the  <literal>@Configuration</literal>-annotated classes from the codebase appear transpiled into functional bean registrations. These functional bean registrations skip all the ingest and yield a <literal>BeanFactory</literal> that looks like it would have had we run the normal code.</simpara>
+<programlisting language="java" linenumbering="unnumbered">...
+import org.springframework.boot.context.properties.ConfigurationPropertiesBindingPostProcessor__BeanDefinitions;
+import org.springframework.boot.sql.init.dependency.DatabaseInitializationDependencyConfigurer__BeanDefinitions;
+import org.springframework.boot.validation.beanvalidation.MethodValidationExcludeFilter__BeanDefinitions;
+import org.springframework.boot.web.server.ErrorPageRegistrarBeanPostProcessor__BeanDefinitions;
+import org.springframework.boot.web.server.WebServerFactoryCustomizerBeanPostProcessor__BeanDefinitions;
+import org.springframework.context.event.DefaultEventListenerFactory__BeanDefinitions;
+import org.springframework.context.event.EventListenerMethodProcessor__BeanDefinitions;
+import org.springframework.data.repository.core.support.PropertiesBasedNamedQueries__BeanDefinitions;
+import org.springframework.data.repository.core.support.RepositoryComposition__BeanDefinitions;
+import org.springframework.data.web.config.ProjectingArgumentResolverRegistrar__BeanDefinitions;
+import org.springframework.data.web.config.SpringDataJacksonConfiguration__BeanDefinitions;
+import org.springframework.data.web.config.SpringDataWebConfiguration__BeanDefinitions;
+import org.springframework.transaction.annotation.AbstractTransactionManagementConfiguration__BeanDefinitions;
+import org.springframework.transaction.annotation.ProxyTransactionManagementConfiguration__BeanDefinitions;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurationSupport__BeanDefinitions;
+
+/**
+ * Register bean definitions for the bean factory.
+ */
+public class AotApplication__BeanFactoryRegistrations {
+  /**
+   * Register the bean definitions.
+   */
+  public void registerBeanDefinitions(DefaultListableBeanFactory beanFactory) {
+    beanFactory.registerBeanDefinition("org.springframework.context.event.internalEventListenerProcessor", EventListenerMethodProcessor__BeanDefinitions.getInternalEventListenerProcessorBeanDefinition());
+    beanFactory.registerBeanDefinition("org.springframework.context.event.internalEventListenerFactory", DefaultEventListenerFactory__BeanDefinitions.getInternalEventListenerFactoryBeanDefinition());
+    beanFactory.registerBeanDefinition("aotApplication", AotApplication__BeanDefinitions.getAotApplicationBeanDefinition());
+    beanFactory.registerBeanDefinition("basicsConfiguration", BasicsConfiguration__BeanDefinitions.getBasicsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("bfppConfiguration", BfppConfiguration__BeanDefinitions.getBfppConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("compilationEndpointConfiguration", CompilationEndpointConfiguration__BeanDefinitions.getCompilationEndpointConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("orderService", OrderService__BeanDefinitions.getOrderServiceBeanDefinition());
+    beanFactory.registerBeanDefinition("proxiesConfiguration", ProxiesConfiguration__BeanDefinitions.getProxiesConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("componentsConfiguration", ComponentsConfiguration__BeanDefinitions.getComponentsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("greetingsController", GreetingsController__BeanDefinitions.getGreetingsControllerBeanDefinition());
+    beanFactory.registerBeanDefinition("detectionConfiguration", DetectionConfiguration__BeanDefinitions.getDetectionConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("eventsConfiguration", EventsConfiguration__BeanDefinitions.getEventsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("factoryBeansConfiguration", FactoryBeansConfiguration__BeanDefinitions.getFactoryBeansConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("migrationsConfiguration", MigrationsConfiguration__BeanDefinitions.getMigrationsConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("propertiesConfiguration", PropertiesConfiguration__BeanDefinitions.getPropertiesConfigurationBeanDefinition());
+    beanFactory.registerBeanDefinition("appStore", AppStore__BeanDefinitions.getAppStoreBeanDefinition());
+    beanFactory.registerBeanDefinition("playStore", PlayStore__BeanDefinitions.getPlayStoreBeanDefinition());
+...</programlisting>
+<simpara>There is more to discuss here, but that&#8217;ll have to wait.</simpara>
+<simpara>You can run the AOT-optimized and generated code on the JRE using the  <literal>-DspringAot=true</literal> switch. Thus:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">java -DspringAot=true -jar aot-0.0.1-SNAPSHOT.jar</programlisting>
+<simpara>You can configure the Spring Boot build plugin to run with that switch active by default, too:</simpara>
+<programlisting language="xml" linenumbering="unnumbered">&lt;plugin&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+    &lt;configuration&gt;
+        &lt;systemPropertyVariables&gt;
+            &lt;springAot&gt;true&lt;/springAot&gt;
+        &lt;/systemPropertyVariables&gt;
+    &lt;/configuration&gt;
+&lt;/plugin&gt;</programlisting>
+<simpara>Run it in the usual way:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">mvn spring-boot:run</programlisting>
+<simpara>The AOT mode is great because it&#8217;s much faster than a complete GraalVM native image compilation and run. In addition, you&#8217;ll find that because the AOT mode generates more efficient code that cuts out a lot of the extra <literal>BeanDefinition</literal> instances that might otherwise hang around, the resulting application can be slightly more efficient even just running on the JRE.</simpara>
+<simpara>That said, running in the AOT mode is only useful if you&#8217;re trying to sift through the generated files to confirm something is as it should be. It doesn&#8217;t help you if you don&#8217;t yet know what should be in the first place. This part can be tricky because it can be difficult to know what configuration is required.</simpara>
+</section>
+<section xml:id="_run_the_java_agent">
+<title>Run the Java Agent</title>
+<simpara>You can run the program and the agent alongside it and get the agent to tell you what things were reflected on, serialized, proxied, etc., by running the app on the JVM with <literal>-Dagent=true</literal> when running the app with maven (try <literal>mvn spring-boot:run</literal>). The agent dumps config files in the <literal>target/native/agent-output</literal> directory. You can inspect those and then use those to tell you what you&#8217;ll need to contribute hints for. The Java agent dumps out <emphasis>everything</emphasis>, including some things that Spring&#8217;s AOT engine will do automatically for you, and thus, you don&#8217;t need to reproduce. I&#8217;d start with all the mentions of types across the various configuration files in the same packages as the code in your application. That way, you won&#8217;t specify hints that Spring might&#8217;ve already done for you.</simpara>
+<simpara>Importantly: the program also prints out all the random stuff and changes from one run to another. YOu can usually identify these as the classes with dollar signs in them or UUID-like names. Ignore those until the very end. They&#8217;re probably not interesting.</simpara>
+<simpara>Configure the Spring Boot Maven build plugin to contribute a JVM argument:</simpara>
+<programlisting language="xml" linenumbering="unnumbered">&lt;plugin&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+    &lt;configuration&gt;
+        &lt;jvmArguments&gt;
+            -agentlib:native-image-agent=config-output-dir=target/native-image
+        &lt;/jvmArguments&gt;
+        &lt;!--....--&gt;
+    &lt;/configuration&gt;
+&lt;/plugin&gt;</programlisting>
+<simpara>Then run it thusly:</simpara>
+<programlisting language="shell" linenumbering="unnumbered">./mvnw -DskipTests clean package spring-boot:run</programlisting>
+<simpara>Inspect the <literal>target/native-image/</literal> directory. You&#8217;ll find that the Java agent has written out a <literal>reflect-config.json</literal> file that tells us something will reflect upon the <literal>Person</literal> type at runtime. We can also see an entry for the <literal>data.csv</literal> file in the <literal>resource-config.json</literal> file.</simpara>
+<simpara>It would be best to exhaust as many code paths as possible while running the Java agent. Perhaps you could run it while running your tests?  We want to ensure that you capture every scenario that may require configuration. Be sure to go through all the <literal>.json</literal> configuration files and note every instance where one of the types we&#8217;ve created - like <literal>Person</literal> -  is present.</simpara>
+<simpara>At this point, I&#8217;d disable the Java agent, commenting it out in the Maven <literal>pom.xml</literal>. It&#8217;s served its purpose for now. Move the <literal>native-image</literal> directory aside, so it doesn&#8217;t get deleted later. If you try to compile and run the application as a GraalVM native image and fail, you will want to consult these files.</simpara>
+</section>
+<section xml:id="_soft_touch_refactorings_to_enable_aot">
+<title>Soft-touch Refactorings to Enable AOT</title>
+<simpara>Let&#8217;s look at a bare-bones example that could run afoul of GraalVM&#8217;s native image compilation but for our interventions. Here&#8217;s the completed program, complete with code to support the Spring AOT engine&#8217;s work turning our application into a GraalVM native image:</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.migrations;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.SneakyThrows;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.ImportRuntimeHints;
+import org.springframework.core.io.Resource;
+import org.springframework.util.FileCopyUtils;
+
+import java.io.InputStreamReader;
+import java.util.stream.Stream;
+
+@Configuration
+class MigrationsConfiguration {
+
+	<co xml:id="CO9-1"/>
+	record Person(String id, String name) {
+	}
+
+	@Bean
+	@RegisterReflectionForBinding(Person.class) <co xml:id="CO9-2"/>
+	@ImportRuntimeHints(MigrationsRuntimeHintsRegistrar.class)
+	ApplicationListener&lt;ApplicationReadyEvent&gt; peopleListener(ObjectMapper objectMapper,
+			@Value("classpath:/data.csv") Resource csv) { <co xml:id="CO9-3"/>
+		return new ApplicationListener&lt;ApplicationReadyEvent&gt;() {
+			@SneakyThrows
+			@Override
+			public void onApplicationEvent(ApplicationReadyEvent event) {
+				try (var in = new InputStreamReader(csv.getInputStream())) {
+					var csvData = FileCopyUtils.copyToString(in);
+					Stream.of(csvData.split(System.lineSeparator())).map(line -&gt; line.split(","))
+							.map(row -&gt; new Person(row[0], row[1])).map(person -&gt; json(person, objectMapper))
+							.forEach(System.out::println);
+				}
+			}
+		};
+	}
+
+	@SneakyThrows
+	private static String json(Person person, ObjectMapper objectMapper) {
+		return objectMapper.writeValueAsString(person);
+	}
+
+	static class MigrationsRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
+
+		@Override
+		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+			hints.resources().registerPattern("data.csv");
+
+			<co xml:id="CO9-4"/>
+			// hints.reflection().registerType(Person.class, MemberCategory.values());
+		}
+
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO9-1">
+<para>this program simply reads in CSV data (in the least production-worthy  way possible!) and maps the rows into <literal>Person</literal> instances</para>
+</callout>
+<callout arearefs="CO9-2">
+<para>we know that the Jackson JSON marshaling library will need to reflect on those <literal>Person</literal> instances, so we&#8217;ve used Spring&#8217;s convenient <literal>@RegisterReflectionForBinding</literal> annotation to tell Spring to proactively register the GraalVM hints required to support that. This annotation must be on or in a Spring component or <literal>@Configuration</literal> class.</para>
+</callout>
+<callout arearefs="CO9-3">
+<para>we know that this program will need to read the <literal>.csv</literal> file from the <literal>.jar</literal>, a resource, which will be a problem for GraalVM unless we contribute some hints. We use the <literal>@ImportRuntimeHints</literal> annotation to tell Spring to involve a class of type <literal>RuntimeHintsRegistrar</literal> in the compilation process so that we can programmatically contribute those hints.</para>
+</callout>
+<callout arearefs="CO9-4">
+<para>we <emphasis>could</emphasis>, as an alternative to using the <literal>@RegisterReflectionForBinding</literal> annotation, have also contributed a hint for reflective access for that type.</para>
+</callout>
+</calloutlist>
+<simpara>You&#8217;ll need to create a file with sample data called <literal>src/main/resources/data.csv</literal>. Here&#8217;s the one I put in the code:</simpara>
+<programlisting language="properties" linenumbering="unnumbered">1,Josh
+2,Stéphane
+3,Andy
+4,Madhura
+5,Olga
+6,Yuxin
+7,Violetta
+8,Spencer
+9,Chloe
+10,Dr. Syer</programlisting>
+<simpara>Run this on the JRE, and it should just work. As expected.</simpara>
+<simpara>Now, for our example to work - or, instead, <emphasis>not</emphasis> work, in a GraalVM native image, you&#8217;ll need to comment out the lines where we use the <literal>@RegisterReflectionForBinding</literal> and <literal>@ImportRuntimeHints</literal> annotations. Then, run and compile the program. You should see failures when you start it up as a GraalVM native image.</simpara>
+<simpara>The first error I got was related to being unable to load the <literal>.csv</literal> file. So, restore the <literal>@ImportRuntimeHints</literal> annotation. Compile and run that as a GraalVM native image. Next, you&#8217;ll get an error about serializing the <literal>Person</literal>. Restore the line with <literal>@RegisterReflectionForBinding</literal>, and everything should work.</simpara>
+<simpara>Compile and run the program; you should see the <literal>Person</literal> records printed on the console.</simpara>
+<simpara>This program uses the Jackson JSON marshaling library directly to print out JSON representations of some objects. This example is a bit contrived: when was the last time you used Jackson to print out some objects, and <emphasis>that&#8217;s all</emphasis>? It seldom happens.  If this program had a controller that returned the <literal>Person</literal>, Spring would automatically know to register hints for it. There are a lot of common cases like this where Spring will <emphasis>just work</emphasis>.</simpara>
+<simpara>Spring will still need a custom hint for the <literal>.csv</literal> file.</simpara>
+</section>
+</section>
+<section xml:id="_processing_the_bean_factory">
+<title>Processing the Bean Factory</title>
+<simpara>Spring makes it trivial to act on a collection of  <literal>BeanDefinition</literal> instances through callback interfaces evaluated at compile time (AOT) and runtime (JRE). For example, the <literal>BeanFactoryPostProcessor</literal> is a callback interface that lets us access the <literal>BeanFactory</literal> and manipulate the <literal>BeanDefinition</literal> instances. We can register new ones, update existing ones, or even remove them in this interface and other, more specific subclasses of this interface.</simpara>
+<simpara>The <literal>BeanFactory</literal> is mutable at this point. Various Spring projects use this fact to great effect. Before the Spring team turned the Spring Cloud project into the microservices sensation it is today; its sole function was to make it easy for Spring Boot applications deployed to a Platform-as-a-Service (PaaS) (like Cloud Foundry or Heroku) to connect to managed infrastructure like a database or a message queue. It did this by analyzing the <literal>BeanFactory</literal>, identifying infrastructure-related beans like <literal>javax.sql.DataSource</literal>, and then replacing them with a new bean of an identical interface, but with a connection that is pointing to the managed infrastructure identified by environment variables in the process space of the running application. So, you write an application using a <literal>DataSource</literal> talking to an embedded H2 instance on your local machine. Still, when you deploy it, this <literal>BeanFactoryPostProcessor</literal> identifies connection strings in environment variables in the process space for the application and uses that to create a proper <literal>DataSource</literal> pointing to managed infrastructure, presumably on another host and port. This process was transparent to the user, thanks to the magic of <literal>BeanFactoryPostProcessor</literal> implementations.</simpara>
+<simpara>The <literal>BeanFactoryPostProcessor</literal> is a great place to see <emphasis>everything</emphasis> in the <literal>BeanFactory</literal> all in one place when the application starts up.</simpara>
+<simpara>The <literal>BeanFactoryInitializationAotProcessor</literal> is a new interface that is a peer to the <literal>BeanFactoryPostProcessor</literal>. It runs at compile time, and you have the same contract: you can contribute hints (or even do code-generation) while analyzing the <literal>BeanDefinition</literal> instances in the application.</simpara>
+<simpara>You must work only in terms of the <literal>BeanDefinition</literal> instances and bean names in both these interfaces. Remember, Spring hasn&#8217;t created any of the beans at this point. So, while you&#8217;ll be able to call <literal>BeanFactory#getBean(String)</literal>, it&#8217;ll force  Spring to eagerly initialize the object, calling the constructor and the methods and so on before the bean is ready. Don&#8217;t do this - it&#8217;ll screw things up!</simpara>
+<simpara>Let&#8217;s look at a trivial example. We&#8217;ll write a <literal>BeanFactoryPostProcessor</literal> that analyzes and programmatically registers a new <literal>BeanDefinition</literal> in the application context. Would you ever need to do this? No. But it&#8217;s hopefully illustrative. We&#8217;ll use a subclass of <literal>BeanFactoryPostProcessor</literal> called <literal>BeanDefinitionRegistryPostProcessor</literal>, which gives us a <literal>BeanFactory</literal> downcast to a specific subtype that supports programmatically registering new beans. The trouble is that this bean we&#8217;ll register will require some reflection using the Jackson JSON API, so we&#8217;ll need to also register a GraalVM hint for it using a <literal>BeanFactoryInitializationAotProcessor</literal> contribution.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.bfpp;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.SneakyThrows;
+import org.springframework.aot.hint.MemberCategory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+import java.util.UUID;
+
+import static com.example.aot.bfpp.BfppConfiguration.BEAN_NAME;
+
+@Configuration
+class BfppConfiguration {
+
+	<co xml:id="CO10-1"/>
+	static String BEAN_NAME = "myBfppListener";
+
+	<co xml:id="CO10-2"/>
+	@Bean
+	static ListenerBeanFactoryPostProcessor listenerBeanFactoryPostProcessor() {
+		return new ListenerBeanFactoryPostProcessor();
+	}
+
+	@Bean
+	static ListenerBeanFactoryInitializationAotProcessor listenerBeanFactoryInitializationAotProcessor() {
+		return new ListenerBeanFactoryInitializationAotProcessor();
+	}
+
+}
+
+<co xml:id="CO10-3"/>
+class Listener implements ApplicationListener&lt;ApplicationReadyEvent&gt; {
+
+	private final ObjectMapper objectMapper;
+
+	Listener(ObjectMapper objectMapper) {
+		this.objectMapper = objectMapper;
+	}
+
+	@Override
+	@SneakyThrows
+	public void onApplicationEvent(ApplicationReadyEvent event) {
+		var products = List.of(new Product(UUID.randomUUID().toString()), new Product(UUID.randomUUID().toString()));
+		for (var p : products)
+			System.out.println(objectMapper.writeValueAsString(p));
+	}
+
+}
+
+record Product(String sku) {
+}
+
+<co xml:id="CO10-4"/>
+class ListenerBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
+	@Override
+	public void postProcessBeanFactory(ConfigurableListableBeanFactory bf) throws BeansException {
+	}
+
+	@Override
+	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+		if (!registry.containsBeanDefinition(BEAN_NAME))
+			registry.registerBeanDefinition(BEAN_NAME,
+					BeanDefinitionBuilder.rootBeanDefinition("com.example.aot.bfpp.Listener").getBeanDefinition());
+	}
+
+}
+
+<co xml:id="CO10-5"/>
+class ListenerBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
+
+	@Override
+	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory bf) {
+
+		if (bf.containsBeanDefinition(BEAN_NAME)) {
+			return (ctx, code) -&gt; {
+				var hints = ctx.getRuntimeHints();
+				hints.reflection().registerType(Product.class, MemberCategory.values());
+			};
+		}
+		return null;
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO10-1">
+<para>we were going to work with the same bean at compile time and runtime. Here, we create a variable with the name of the bean for subsequent access from both interface implementations at both phases (AOT and runtime)</para>
+</callout>
+<callout arearefs="CO10-2">
+<para>Note that we use the <literal>static</literal> keyword with both bean definition registrations. Spring will involve these beans very early in the lifecycle of the <literal>BeanFactory</literal>. There will not be any live-fire beans. So,  use <literal>static</literal> to avoid weird lifecycle issues. Avoid depending on anything from the <literal>BeanFactory</literal>. Don&#8217;t force Spring to construct the <literal>@Configuration</literal> class containing the <literal>@Bean</literal> registration methods, too.</para>
+</callout>
+<callout arearefs="CO10-3">
+<para>the <literal>Listener</literal> class is a trivia <literal>ApplicationListener</literal> that, when run, will iterate over a collection of dummy DTOs and print them out using Jackson for JSON serialization. This serialization involves reflection, for which we&#8217;ll need to furnish hints.</para>
+</callout>
+<callout arearefs="CO10-4">
+<para>the first callback, the <literal>ListenerBeanFactoryPostProcessor</literal>, programmatically registers a new <literal>BeanDefinition</literal> of type <literal>Listener</literal> if a bean of the name we&#8217;ve specified in the variable doesn&#8217;t already exist in the context. This object runs at runtime in both the JRE and the AOT application. Here we mutate the <literal>BeanFactory</literal>.</para>
+</callout>
+<callout arearefs="CO10-5">
+<para>Spring&#8217;s AOT engine will involve the <literal>ListenerBeanFactoryInitializationAotProcessor</literal> during the compilation phase so that it may furnish hints to make the JSON serialization of the <literal>Product</literal> records work.</para>
+</callout>
+</calloutlist>
+<simpara>These two interfaces work well together. They complement each other. The <literal>BeanFactory</literal> is the lowest level against which I&#8217;d write code when manipulating the Spring application context. I don&#8217;t want to write code in terms of the <literal>BeanFactory</literal> if I can avoid it. The <literal>BeanFactory</literal> suggests a  valid working application. But it&#8217;s not a working application. Spring must first turn the <literal>BeanDefinition</literal> instances into valid objects, or <emphasis>beans</emphasis>. That part comes next.</simpara>
+</section>
+<section xml:id="_processing_beans">
+<title>Processing Beans</title>
+<simpara>Suppose the <literal>BeanFactory</literal> is too meta (no, not <emphasis>that</emphasis> Meta!) for you. In that case, you can still do interesting things at the next rung in the abstraction ladder, working with beans directly, both before initialization and after.</simpara>
+<simpara>Working on a bean-by-bean basis can be very powerful. If you want to work with actual, live-fire beans, you can use Spring&#8217;s <literal>BeanPostProcessor</literal>. This interface puts you in a position to act on and transform objects before they&#8217;re finally live and handling logic. <literal>BeanPostProcessor</literal> instances are great for infrastructure code, such as frameworks, where you need to note, retain, or observe references to objects of a given shape. What shape? Well, anything! Objects that have a certain marker interface. Objects that have a certain annotation. Whatever you want and whatever you could discover, given reflection.  Let&#8217;s look at an example that creates proxies for beans with an annotation, <literal>@Logged</literal>, logging out any method invocations.</simpara>
+<simpara>I implement this proxy with Spring&#8217;s <literal>ProxyFactory</literal>, which makes it trivial to use the <emphasis>proxy</emphasis> design pattern. In its most general form, a proxy is a class functioning as an interface to something else. Spring uses proxies to handle declarative transaction management, auditing, security, logging, concurrency, etc. there is a great way to <emphasis>decorate</emphasis> an existing object with cross-cutting concerns, like starting and committing a transaction before and after a method invocation. Spring uses them all over the place for things like <literal>@Transactional</literal>, <literal>@Scheduled</literal>, <literal>@Async</literal>, <literal>@Authorized</literal>, and countless more.</simpara>
+<simpara>There are two types of proxies: CGLIB and JDK. Proxies make it trivial to create an object that implements an interface type of your choice and then forwards the actual work to a concrete instance of your choice.  JDK proxies are built with Java&#8217;s <link xl:href="https://www.baeldung.com/java-dynamic-proxies"><literal>InvocationHandler</literal></link>.  In the case of JDK proxies, the word <literal>interface</literal>  used in the description above is quite literally a Java <literal>interface</literal> type.</simpara>
+<simpara>But what if the contract of the surface area, the <emphasis>interface</emphasis> of your class, isn&#8217;t a Java interface? What if it&#8217;s a concrete class for which it makes little sense to extract a separate Java interface? JDK proxies require an interface, and they were the only thing supported in Spring until Spring Framework 1.1.</simpara>
+<note>
+<simpara>I can&#8217;t be sure, but I suspect this is one of the reasons so much of the early literature for Spring Framework suggests using interfaces with Spring beans and why you&#8217;d see things like <literal>FooService</literal> and <literal>DefaultFooService</literal> or <literal>FooService</literal> and <literal>FooServiceImpl</literal> or whatever. Nowadays, that&#8217;s an anti-pattern and highly discouraged, <emphasis>unless</emphasis> you plan to have more than one implementation of <literal>FooService</literal>. Avoid the knee-jerk reaction to create an interface for an object that has the same shape as the object. It only complicates things.</simpara>
+</note>
+<simpara>Spring supports concrete proxies, too, using <link xl:href="https://github.com/cglib/cglib">CGLIB</link>. CGLIB is used to dynamically generate the code to subclass an existing type. The constraint, thus, is that the type is subclassable. So, beware of things like <literal>final</literal> and <literal>sealed</literal>.</simpara>
+<simpara>Spring&#8217;s concrete proxies are unique to Spring, but they&#8217;re <emphasis>everywhere</emphasis>. You use them every time you use a <literal>@Configuration</literal> class!</simpara>
+<simpara>Naturally, creating a dynamic subclass of a given type, registering it in the <literal>ClassLoader</literal>, and then swapping out your instance for the instance that delegates to yours imply a lot of funny business that we&#8217;ll need to account for everything at compile time in a GraalVM native image context.</simpara>
+<section xml:id="_proxies">
+<title>Proxies</title>
+<simpara>Mercifully, Spring can do a lot of this for us. Let&#8217;s take a look at an example.</simpara>
+<simpara>Let&#8217;s look at a simple proxy example of the logs information whenever somebody invokes a method annotated called <literal>@Logged</literal>, which we&#8217;ll create. The annotation is nice because it&#8217;s decorative. We&#8217;re layering capabilities onto this method without complicating the business logic implementation.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.bpp.proxies;
+
+import org.aopalliance.intercept.MethodInterceptor;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.SmartInstantiationAwareBeanPostProcessor;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Service;
+import org.springframework.util.ReflectionUtils;
+
+import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.ElementType.TYPE;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
+@Configuration
+class ProxiesConfiguration {
+
+	<co xml:id="CO11-1"/>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; loggedListener(OrderService service) {
+		return event -&gt; service.addToPrices(7);
+	}
+
+	@Bean
+	LoggedBeanPostProcessor loggedBeanPostProcessor() {
+		return new LoggedBeanPostProcessor();
+	}
+
+}
+
+<co xml:id="CO11-2"/>
+class LoggedBeanPostProcessor implements SmartInstantiationAwareBeanPostProcessor {
+
+	<co xml:id="CO11-3"/>
+	private static ProxyFactory proxyFactory(Object target, Class&lt;?&gt; targetClass) {
+		var pf = new ProxyFactory();
+		pf.setTargetClass(targetClass);
+		pf.setInterfaces(targetClass.getInterfaces());
+		pf.setProxyTargetClass(true); <co xml:id="CO11-4"/>
+		pf.addAdvice((MethodInterceptor) invocation -&gt; {
+			var methodName = invocation.getMethod().getName();
+			System.out.println("before " + methodName);
+			var result = invocation.getMethod().invoke(target, invocation.getArguments());
+			System.out.println("after " + methodName);
+			return result;
+		});
+		if (null != target) {
+			pf.setTarget(target);
+		}
+		return pf;
+	}
+
+	<co xml:id="CO11-5"/>
+	private static boolean matches(Class&lt;?&gt; clazzName) {
+		return clazzName != null &amp;&amp; (clazzName.getAnnotation(Logged.class) != null || ReflectionUtils
+				.getUniqueDeclaredMethods(clazzName, method -&gt; method.getAnnotation(Logged.class) != null).length &gt; 0);
+	}
+
+	<co xml:id="CO11-6"/>
+	@Override
+	public Class&lt;?&gt; determineBeanType(Class&lt;?&gt; beanClass, String beanName) throws BeansException {
+		if (matches(beanClass)) {
+			return proxyFactory(null, beanClass).getProxyClass(beanClass.getClassLoader());
+		}
+		return beanClass;
+	}
+
+	<co xml:id="CO11-7"/>
+	@Override
+	public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+		var beanClass = bean.getClass();
+		if (matches(beanClass)) {
+			return proxyFactory(bean, beanClass).getProxy(beanClass.getClassLoader());
+		}
+		return bean;
+	}
+
+}
+
+@Inherited
+@Target({ TYPE, METHOD })
+@Retention(RUNTIME)
+@interface Logged {
+
+}
+
+@Logged
+@Service
+class OrderService {
+
+	public void addToPrices(double amount) {
+		System.out.println("adding $" + amount);
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO11-1">
+<para>as usual, we&#8217;ll try things out when the application starts up</para>
+</callout>
+<callout arearefs="CO11-2">
+<para>we&#8217;re going to create this proxy in a subclass of <literal>BeanPostProcessor</literal> called <literal>SmartInstantiationAwareBeanPostProcessor</literal>. Spring&#8217;s AOT engine invokes the <literal>SmartInstantiationAwareBeanPostProcessor#determineBeanType</literal> to determine what the bean should be. Spring&#8217;s AOT engine uses that information to determine what proxies to build. When the application starts up completely, Spring will also invoke <literal>SmartInstantiationAwareBeanPostProcessor#postProcessAfterInitialization(Object bean, String beanName)</literal>, giving you a chance to inspect a given bean and -</para>
+</callout>
+<callout arearefs="CO11-3">
+<para>we need to both build a proxy and determine the resulting class of that proxy at various phases in the lifecycle of the <literal>SmartInstantiationAwareBeanPostProcessor</literal>. So, we&#8217;ll return the builder, an instance of <literal>ProxyFactory</literal>, and we&#8217;ll either use it to determine the expected proxy&#8217;s class type or create the final proxy object.</para>
+</callout>
+<callout arearefs="CO11-4">
+<para>setting <literal>proxyTargetClass</literal> to <literal>true</literal> and specifying a <literal>targetClass</literal> results in a CGLIB proxy. Otherwise, the expectation is that you&#8217;re only proxying interfaces.</para>
+</callout>
+<callout arearefs="CO11-5">
+<para><literal>BeanPostProcessor</literal> implementations visit every bean in the <literal>BeanFactory</literal>, so we must only act on those with the annotation present. The <literal>matches</literal> method encodes this logic that looks for all types annotated with, or with methods annotated with, the <literal>@Logged</literal> annotation.</para>
+</callout>
+<callout arearefs="CO11-6">
+<para>the <literal>SmartInstantiationAwareBeanPostProcessor#determineBeanType</literal> method does almost all the work of creating a proxy but stops short of actually creating the proxy. We&#8217;re only interested in knowing what the class would be <emphasis>if</emphasis> we did create a proxy. This information then gets fed into the AOT engine.</para>
+</callout>
+<callout arearefs="CO11-7">
+<para>here&#8217;s where the rubber meets the road, and Spring creates a CGLIB proxy at runtime. The proxy creation works fine, as Spring will have already registered the requisite hints with GraalVM during compilation.</para>
+</callout>
+</calloutlist>
+<simpara>In this example, we&#8217;re using the cohesive design of Spring&#8217;s AOT engine to transparently create proxies that <emphasis>just work</emphasis>. If we on the Spring team have done our job right, and you&#8217;ve written your code to leverage the right interfaces, then you can trust Spring to do the right thing for CGLIB proxies.</simpara>
+<simpara>Compile and run the application, and you should see information logged when we invoke the method in the <literal>ApplicationListener</literal>.</simpara>
+</section>
+<section xml:id="_code_generation">
+<title>Code Generation</title>
+<simpara>Now, before we go much further, let me just stress that this <emphasis>isn&#8217;t</emphasis> the return of  <link xl:href="https://docs.spring.io/spring-roo/docs/current/reference/html/">Spring Roo</link>!</simpara>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="images/roo.png"/>
+</imageobject>
+<textobject><phrase>roo</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>But code generation is a powerful part of the Spring AOT engine. It manifests in two ways: generating the requisite <literal>.json</literal> configuration files for GraalVM native images, and  generating Java code, in <literal>.java</literal> files, from whole cloth.</simpara>
+<simpara>Suppose you&#8217;re using a library, and it is using <literal>InvocationHandler</literal>, outside of Spring&#8217;s purview. You&#8217;ll need to furnish the appropriate hints for GraalVM knows what to do there. You might also have stuff you want to do at runtime that requires upfront, compile-time processing. Code generation is one of the most powerful dimensions of Spring&#8217;s AOT engine. We use it all over the place in Spring Framework 6!  You can both furnish configuration and generate code at compile with implementations of the AOT equivalent to <literal>BeanPostProcessor</literal>, the  <literal>BeanRegistrationAotProcessor</literal>.</simpara>
+<simpara>Let&#8217;s look at a simple example. This time we&#8217;ll revisit the code generation but go even further. We&#8217;re going to register a brand new bean during compilation, overwriting one that&#8217;s already present, so that we can capture compile-time information and put it in the endpoint. This Actuator endpoint, the <literal>CompilationEndpoint</literal> is suitably trivial as to be understandable in a quick introduction like this one. This new <literal>CompilationEndpoint</literal> will capture information about the ambient state of the build <emphasis>at compile-time</emphasis>, like the time and directory in which the code is compiled.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.bpp.code;
+
+import org.springframework.beans.factory.aot.BeanRegistrationAotContribution;
+import org.springframework.beans.factory.aot.BeanRegistrationAotProcessor;
+import org.springframework.beans.factory.support.RegisteredBean;
+import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
+import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.javapoet.CodeBlock;
+
+import javax.lang.model.element.Modifier;
+import java.io.File;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Configuration
+class CompilationEndpointConfiguration {
+
+	<co xml:id="CO12-1"/>
+	@Bean
+	CompilationEndpoint compilationEndpoint() {
+		return new CompilationEndpoint();
+	}
+
+	<co xml:id="CO12-2"/>
+	@Bean
+	CompilationEndpointBeanRegistrationAotProcessor compilationEndpointBeanRegistrationAotProcessor() {
+		return new CompilationEndpointBeanRegistrationAotProcessor();
+	}
+
+	<co xml:id="CO12-3"/>
+	@Bean
+	ApplicationListener&lt;ApplicationReadyEvent&gt; compilationEndpointListener(CompilationEndpoint endpoint) {
+		return event -&gt; {
+			var map = endpoint.compilation();
+			for (var e : map.entrySet()) {
+				System.out.println(e.getKey() + '=' + e.getValue());
+			}
+		};
+	}
+
+}
+
+<co xml:id="CO12-4"/>
+@Endpoint(id = "compilation")
+class CompilationEndpoint {
+
+	private final Map&lt;String, Object&gt; map = new ConcurrentHashMap&lt;&gt;();
+
+	CompilationEndpoint() { // default runtime version
+	}
+
+	CompilationEndpoint(Instant instant, File directory) {
+		map.putAll(Map.of("instant", instant, "directory", directory));
+	}
+
+	@ReadOperation
+	public Map&lt;String, Object&gt; compilation() {
+		return Map.of("compilation", this.map, "now", Instant.now());
+	}
+
+}
+
+<co xml:id="CO12-5"/>
+class CompilationEndpointBeanRegistrationAotProcessor implements BeanRegistrationAotProcessor {
+
+	@Override
+	public BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
+
+		if (!CompilationEndpoint.class.isAssignableFrom(registeredBean.getBeanClass()))
+			return null;
+
+		return (ctx, code) -&gt; {
+
+			var generatedClasses = ctx.getGeneratedClasses();
+
+			var generatedClass = generatedClasses.getOrAddForFeatureComponent(
+					CompilationEndpoint.class.getSimpleName() + "Feature", CompilationEndpoint.class,
+					b -&gt; b.addModifiers(Modifier.PUBLIC));
+
+			var generatedMethod = generatedClass.getMethods().add("postProcessCompilationEndpoint", build -&gt; {
+
+				var outputBeanVariableName = "outputBean";
+				build.addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+						.addParameter(RegisteredBean.class, "registeredBean") //
+						.addParameter(CompilationEndpoint.class, "inputBean")//
+						.returns(CompilationEndpoint.class)
+						<co xml:id="CO12-6"/>
+						.addCode(CodeBlock.builder()
+								.addStatement("$T $L = new $T( $T.ofEpochMilli($L), new $T($S))",
+										CompilationEndpoint.class, outputBeanVariableName, CompilationEndpoint.class,
+										Instant.class, System.currentTimeMillis() + "L", File.class,
+										new File(".").getAbsolutePath()
+
+								).addStatement("return $L", outputBeanVariableName).build());
+			});
+			var methodReference = generatedMethod.toMethodReference();
+			code.addInstancePostProcessor(methodReference);
+		};
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO12-1">
+<para>we&#8217;re going to register an empty, no-op version of the <literal>CompilationEndpoint</literal> here</para>
+</callout>
+<callout arearefs="CO12-2">
+<para>we will post-process the bean at compile time using an implementation of a <literal>BeanRegistrationAotProcessor</literal></para>
+</callout>
+<callout arearefs="CO12-3">
+<para>as usual, we&#8217;ll test things out when the application starts.</para>
+</callout>
+<callout arearefs="CO12-4">
+<para>Have you ever seen how to register a Spring Boot Actuator endpoint? Well, now you have. It&#8217;s easy. Actuator Endpoints should be agnostic of whichever rendering mechanism - HTTP, JMX, etc. - you might use. This endpoint exports key-value pairs in a <literal>Map&lt;String, Object&gt;</literal> returned from the <literal>compilation()</literal> read operation. Note that we have <emphasis>two</emphasis> constructors: one for the no-op case and another for information about the build, like the time and directory of the compilation.</para>
+</callout>
+<callout arearefs="CO12-5">
+<para>Like the <literal>BeanPostProcessor</literal>, <literal>BeanRegistrationAotProcessor</literal> implementations work on a bean-by-bean basis, getting a chance to inspect and change them. We again use the Java Poet abstraction to register new code, a method named <literal>postProcessCompilationEndpoint</literal>, which takes an instance of type <literal>RegisteredBean</literal> and another instance of type <literal>CompilationEndpoint</literal>. The <literal>RegisteredBean</literal> allows us to inspect the reflective metadata associated with the bean, and of course, the <literal>CompilationEndpoint</literal> is the bean we created earlier. If the user doesn&#8217;t use Spring&#8217;s AOT engine, then the bean we looked at earlier is the only bean they&#8217;ll ever get. However, if they use the AOT engine, this method will return a <emphasis>new</emphasis> <literal>CompilationEndpoint</literal>, initialized with values during compilation.</para>
+</callout>
+<callout arearefs="CO12-6">
+<para>the key bit starts here: we use Java Poet to create a new instance of <literal>CompilationEndpoint</literal> with real values initialized and captured during the AOT phase itself. Now <emphasis>that&#8217;s</emphasis> meta!</para>
+</callout>
+</calloutlist>
+<simpara>Compile the application and then wait a minute. Then run the application. You should see that the information about the compilation, which will have occurred a minute or earlier, will be printed in the console.</simpara>
+<simpara>You can see the output of what we&#8217;ve just done in the resulting generated Java code:</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.bpp.code;
+
+import java.io.File;
+import java.time.Instant;
+import org.springframework.beans.factory.support.RegisteredBean;
+
+public class CompilationEndpoint__CompilationEndpointFeature {
+  public static CompilationEndpoint postProcessCompilationEndpoint(RegisteredBean registeredBean,
+      CompilationEndpoint inputBean) {
+    CompilationEndpoint outputBean = new CompilationEndpoint( Instant.ofEpochMilli(1675397552507L), new File("/Users/jlong/Desktop/spring-boot-3-aot/."));
+    return outputBean;
+  }
+}</programlisting>
+<simpara>Pretty tricky, eh? We&#8217;ve written code to write out more code and transform objects whose definitions we ultimately end into the GraalVM native image compiler.  It is kind of mind-bending if you ask me.</simpara>
+</section>
+</section>
+<section xml:id="_testing">
+<title>Testing</title>
+<simpara>Indeed, <emphasis>all</emphasis> of this GraalVM AOT native image machinery is kind of mind-bending to me, if I&#8217;m honest! But, in all that we&#8217;ve seen, I hope you feel that you know what to look at to identify and work around issues you discover. Of course, fixing an issue is critical to success with technology. But how do you ensure that it <emphasis>stays</emphasis> fixed going forward? Here is where Spring&#8217;s rich testing support comes in. It, too, has been updated to work in a GraalVM native image context!</simpara>
+<simpara>Testing is an incredibly important part of the story. The good news is we&#8217;ve done a ton of work to make testing <emphasis role="strong">just work</emphasis> in a native image context.</simpara>
+<simpara>You can run   Maven, or Gradle builds in native mode.</simpara>
+<programlisting language="shell" linenumbering="unnumbered">mvn -PnativeTest test</programlisting>
+<simpara>You&#8217;ll get two output artifacts: one for tests and another for the production code. Fair warning tho! Producing the test code as a native image doubles the interminable compile time! That could be a few minutes. When the compilation finishes, there&#8217;ll be a binary in the <literal>target</literal> directory called <literal>native-tests</literal>. Run that to execute the test code as a native image.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.basics;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+<co xml:id="CO13-1"/>
+@SpringBootTest(properties = "spring.main.web-application-type=none")
+class CustomerRepositoryTest {
+
+	private final CustomerRepository repository;
+
+	CustomerRepositoryTest(@Autowired CustomerRepository repository) {
+		this.repository = repository;
+	}
+
+	@Test
+	void persist() {
+		var saved = repository.save(new Customer(null, "Name"));
+		Assertions.assertNotNull(saved.id());
+		Assertions.assertNotNull(saved);
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO13-1">
+<para>we are creating a Spring <literal>ApplicationContext</literal> and then using it to inject references to beans, like the <literal>CustomerRepository</literal> we created when we looked at AOT fundamentals earlier.</para>
+</callout>
+</calloutlist>
+<simpara>The basics work here. There are some exceptions; you may encounter issues with Mockito. But the basics work. Try it out!</simpara>
+<simpara>It&#8217;s good that the basics work, too. So does it mean that we can run the usual test harness against our business logic and confirm to whatever extent we&#8217;d like that things work as they did before. but what about the new code designed to support turning your application into a GraalVM native image? What about the hints you register for a given type using the Spring AOT engine? Spring has you covered. You can use the new <literal>RuntimeHintsPredicates</literal> type to confirm that your hints are working as expected.</simpara>
+<programlisting language="java" linenumbering="unnumbered">package com.example.aot.migrations;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
+
+class MigrationsConfigurationTest {
+
+	@Test
+	void hints() {
+		var hints = new RuntimeHints();
+		<co xml:id="CO14-1"/>
+		var registrar = new MigrationsConfiguration.MigrationsRuntimeHintsRegistrar();
+		var classloader = getClass().getClassLoader();
+		<co xml:id="CO14-2"/>
+		registrar.registerHints(hints, classloader);
+		<co xml:id="CO14-3"/>
+		Assertions.assertThat(RuntimeHintsPredicates.resource().forResource("data.csv")).accepts(hints);
+
+	}
+
+}</programlisting>
+<calloutlist>
+<callout arearefs="CO14-1">
+<para>create an instance of our implementation on the <literal>RuntimeHintsRegistrar</literal> interface</para>
+</callout>
+<callout arearefs="CO14-2">
+<para>call <literal>RuntimeHintsRegistrar#registerHints</literal> on our implementation, passing in mock instances of <literal>RuntimeHints</literal> and the current <literal>ClassLoader</literal></para>
+</callout>
+<callout arearefs="CO14-3">
+<para>use the <literal>RuntimeHintsPredicates</literal> type to make certain assertions about the state of the <literal>RuntimeHints</literal> afterward</para>
+</callout>
+</calloutlist>
+<simpara>The testing support in Spring is exhaustive, and the Spring Boot even more so. It is not surprising, thus, that Spring&#8217;s new AOT engine would further move the needle.</simpara>
+</section>
+<section xml:id="_a_note_on_compile_times">
+<title>A Note on Compile Times</title>
+<simpara>You know, I love GraalVM, but one thing that can be a real kick in the pants is the wait times. I get <emphasis>why</emphasis> it&#8217;s happening. It&#8217;s not hard to understand. GraalVM does a <emphasis>lot</emphasis> of work - doing a full analysis of our code and all the code on the classpath. So it&#8217;s no wonder it takes as much memory and time as it does. And it has already improved <emphasis>dramatically</emphasis> even since I first started using it in earnest less than three years ago. It&#8217;s a marvelous piece of software. But those compile times are tedious. They interrupt my sense of flow. These prolonged builds remind me of the famous <link xl:href="https://xkcd.com/303/">XKCD "compiling" cartoon</link>.</simpara>
+<simpara>And it&#8217;s almost a curse that they&#8217;ve improved as much as they have because the compilation times are now fast enough that you don&#8217;t have time to go pour a cup of coffee or eat a cup of yogurt but slow enough that you feel like you&#8217;re being interrupted. You&#8217;re being kicked out of 'the zone. This reminds me of that classic XKCD cartoon, which I suspect referred to large C and C++ applications of the day. Java, Go, and other more modern languages have quick compilation times. In this one sense, it feels like GraalVM has taken us a step backward. I kick off a compilation, and my mind wanders. I&#8217;ve been doing so many of these that I&#8217;m starting to hear elevator music when I  compile! Don&#8217;t you hear elevator music? <link xl:href="https://github.com/oracle/graal/issues/5327">So I filed an issue</link>. I want everyone <emphasis>else</emphasis> to hear elevator music, too. So I asked. It doesn&#8217;t hurt to ask. I went to the official GraalVM project, and I asked. it seemed to <link xl:href="https://github.com/oracle/graal/issues/5327#issue-1429805241">resonate with people</link>. One person even suggested as to <link xl:href="https://github.com/oracle/graal/issues/5327#issuecomment-1297108398">which elevator music</link> should be played (one of the soundtracks from the Bond film <link xl:href="https://static1.thegamerimages.com/wordpress/wp-content/uploads/2019/10/Goldeneye.v1.jpg"><emphasis>Goldeneye</emphasis></link>, natch). I love it! And, <link xl:href="https://github.com/fniephaus">Fabio Niephaus</link> - of the official GraalVM team members at Oracle, a Ph.D. - a DOCTOR, like Drs. Seus, Syer, Strange, Who, and Subramaniam - responded with <emphasis>a promising prototype</emphasis>.</simpara>
+<informalfigure>
+<mediaobject>
+<imageobject>
+<imagedata fileref="./images/joshlong-mode.png"/>
+</imageobject>
+<textobject><phrase>joshlong mode</phrase></textobject>
+</mediaobject>
+</informalfigure>
+<simpara>To say that I love this prototype would be an understatement!  I was sad to see that he didn&#8217;t think it would be merged, if for no other reason than because of the copyrighted music. Dang! Oh well. Hope <emphasis>springs</emphasis> eternal.</simpara>
+<simpara>But, something good <emphasis>did</emphasis> come of this: there are some interesting ideas <link xl:href="https://github.com/oracle/graal/issues/5327#issuecomment-1308971081">discussed</link> around how to have a bell chime (or indeed any other sound played) when the compilation finishes. At least this way, you&#8217;d never feel like you wasted precious time if you stepped away for a minute!</simpara>
+</section>
+<section xml:id="_conclusion">
+<title>Conclusion</title>
+<simpara>We&#8217;ve come a long way! When I started covering Spring Native (the predecessor to what would eventually become Spring Framework 6&#8217;s AOT engine) in 2020, a build took <emphasis>10 minutes</emphasis> and only worked for the smallest and most specific scenarios. Now, here we are in 2022, and I can all but effortlessly get a Spring app working in a GraalVM native image context in less than a minute.</simpara>
+<simpara>The performance and memory usage implications are hard to ignore. As the community embraces Spring&#8217;s newfound AOT support, I think the inertia required to move to AOT will become easier and easier to obtain in the next days, weeks, months, and years. I hope this video makes it easier for application and framework developers to leverage Spring Boot 3 and Spring Framework 6. You won&#8217;t be starved for examples if you need guidance in implementing this in your code. Look for pointers to types like <literal>RuntimeHintsRegistrar</literal>, <literal>BeanRegistrationAotProcessor</literal>, and <literal>BeanFactoryInitializationAotProcessor</literal> in the Spring Boot codebase! And those don&#8217;t even begin to cover the projects' implementations, like Spring Security, Spring Data, Spring Cloud, Spring Shell, Spring Integration, and Spring Batch. We&#8217;ve only just begun to scratch the surface here, my friends. And so, too, has the community. That said, things are moving <emphasis>quickly</emphasis>: As I write this, there&#8217;s already work nearly- or already- completed for various opensource projects like Axon, Vaadin, Hilla Framework, MyBatis, JHipster, the official Kubernetes Java client, JobRunr, so many others besides.</simpara>
+<simpara>GraalVM native image technology could be a <emphasis>very</emphasis> powerful way to build applications better suited for production. GraalVM native images save costs and help you build more reliable systems. In addition, Spring&#8217;s AOT engine helps you introduce new possibilities, like serverless, embedded, and infrastructure, for which Spring may not have been considered ideal in the past.</simpara>
+<simpara>I hope this humble text has helped you get started and that you can go to the <link xl:href="https://start.spring.io">Spring Initialzr</link> and generate your next value-producing, production-bound Spring Boot application with GraalVM native image support!</simpara>
+</section>
+</article>

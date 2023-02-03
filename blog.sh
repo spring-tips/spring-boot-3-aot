@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 mvn -DskipTests clean spring-javaformat:apply  compile spring-boot:process-aot
 mkdir -p blog-output && mkdir -p images
-cp -r blog-output/images/* images
+# cp -r blog-output/images/* images
 asciidoctor README.adoc -o output.html
 asciidoctor README.adoc --backend docbook -o output.docbook
 pandoc -f docbook -t docx  ./output.docbook -o output.docx

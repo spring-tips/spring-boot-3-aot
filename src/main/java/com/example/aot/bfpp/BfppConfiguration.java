@@ -32,11 +32,6 @@ class BfppConfiguration {
 		return new ListenerBeanFactoryPostProcessor();
 	}
 
-	@Bean
-	static ListenerBeanFactoryInitializationAotProcessor listenerBeanFactoryInitializationAotProcessor() {
-		return new ListenerBeanFactoryInitializationAotProcessor();
-	}
-
 }
 
 // <3>
